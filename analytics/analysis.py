@@ -1,6 +1,7 @@
 import csv
 from collections import defaultdict
 import matplotlib.pyplot as plt
+import numpy as np
 
 class SignAnalysis:
     def __init__(self, file_path):
@@ -9,26 +10,33 @@ class SignAnalysis:
 
     def load_data(self):
         data = defaultdict(list)
-        with open(self.file_path, mode='r') as file:
-            reader = csv.DictReader(file)
-            for row in reader:
-                sign = int(row["Sign"])  # Đảm bảo đọc nhãn dưới dạng số nguyên
-                accuracy = float(row["Accuracy"])
-                time_taken = float(row["Time Taken"])
-                data[sign].append((accuracy, time_taken))
+        try:
+            with open(self.file_path, mode='r') as file:
+                reader = csv.DictReader(file)
+                for row in reader:
+                    try:
+                        sign = int(row["Sign"])  # Đảm bảo đọc nhãn dưới dạng số nguyên
+                        accuracy = float(row["Accuracy"])
+                        time_taken = float(row["Time Taken"])
+                        data[sign].append((accuracy, time_taken))
+                    except ValueError as e:
+                        print(f"Lỗi trong dữ liệu: {e}")
+                        continue  # Bỏ qua dòng lỗi
+        except FileNotFoundError:
+            print(f"Tệp {self.file_path} không tồn tại!")
         return data
 
     def generate_report(self):
         for sign, entries in self.data.items():
-            avg_accuracy = sum(acc for acc, _ in entries) / len(entries)
-            avg_time = sum(time for _, time in entries) / len(entries)
+            avg_accuracy = np.mean([acc for acc, _ in entries])
+            avg_time = np.mean([time for _, time in entries])
             print(f"Ký hiệu: {sign} - Độ chính xác trung bình: {avg_accuracy:.2f} - Thời gian trung bình: {avg_time:.2f} giây")
 
     def plot_accuracy(self):
         signs = []
         accuracies = []
         for sign, entries in self.data.items():
-            avg_accuracy = sum(acc for acc, _ in entries) / len(entries)
+            avg_accuracy = np.mean([acc for acc, _ in entries])
             signs.append(sign)
             accuracies.append(avg_accuracy)
         

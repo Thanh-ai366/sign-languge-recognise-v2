@@ -33,9 +33,18 @@ class ProgressTracker:
     def get_progress(self):
         return self.progress
 
-# Sử dụng ProgressTracker để theo dõi tiến bộ của người dùng
+    def generate_report(self):
+        report = []
+        for sign, data in self.progress.items():
+            report.append(f"Sign: {sign}")
+            for entry in data:
+                report.append(f"  Accuracy: {entry['accuracy']}, Time: {entry['time_taken']}, Repetitions: {entry['repetitions']}, Smoothness: {entry['smoothness']}")
+        return "\n".join(report)
+
+# Sử dụng ProgressTracker để theo dõi tiến độ
 if __name__ == "__main__":
     tracker = ProgressTracker("user_01")
     tracker.update_progress("A", 0.95, 1.2, 10, 0.85)
     tracker.update_progress("B", 0.85, 1.5, 8, 0.90)
     print(tracker.get_progress())
+    print(tracker.generate_report())

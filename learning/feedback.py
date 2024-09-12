@@ -17,7 +17,7 @@ class FeedbackSystem:
             feedback_message = "Chính xác! Ký hiệu của bạn rất tốt."
         else:
             feedback_message = f"Ký hiệu chưa chính xác. Bạn cần cải thiện {self.get_improvement_suggestion(correct_label)}."
-
+        
         # Thêm phần phân tích độ tự tin của mô hình
         confidence = np.max(prediction) * 100
         feedback_message += f"\nĐộ tự tin của mô hình: {confidence:.2f}%."
@@ -25,8 +25,11 @@ class FeedbackSystem:
         return feedback_message
 
     def get_improvement_suggestion(self, correct_label):
-        # Cung cấp gợi ý cụ thể cho từng ký hiệu
-        return f"cách đặt tay và hướng di chuyển của ký hiệu {self.labels_dict[correct_label]}."
+        # Gợi ý cải thiện cụ thể cho từng yếu tố
+        suggestion = f"cách đặt tay cho ký hiệu {self.labels_dict[correct_label]}"
+        improvement_areas = ["tốc độ", "sự mượt mà"]
+        
+        return f"{suggestion}, đặc biệt là {', '.join(improvement_areas)}."
 
 # Sử dụng hệ thống phản hồi
 if __name__ == "__main__":

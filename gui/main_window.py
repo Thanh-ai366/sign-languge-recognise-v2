@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 from gui.styles import BG_COLOR, BUTTON_COLOR, BUTTON_TEXT_COLOR, TEXT_COLOR, FONT, HEADER_FONT, apply_styles, on_hover, on_leave
 from app.main import start_prediction, start_reverse_recognition
 
@@ -10,13 +10,17 @@ def load_cnn_model():
     if cnn_model is None:
         cnn_model = ...  # Hàm load mô hình CNN
 
-def on_predict():
+def on_predict(progress_bar):
     load_cnn_model()
+    progress_bar.start()
     start_prediction(cnn_model)
+    progress_bar.stop()
     on_action_completed('Nhận diện từ webcam')
 
-def on_reverse_recognition():
+def on_reverse_recognition(progress_bar):
+    progress_bar.start()
     start_reverse_recognition()
+    progress_bar.stop()
     on_action_completed('Nhận diện từ giọng nói')
 
 def on_action_completed(action):
@@ -31,13 +35,16 @@ def create_main_window():
     header = tk.Label(root, text="Nhận Diện Ngôn Ngữ Ký Hiệu", fg=TEXT_COLOR, bg=BG_COLOR, font=HEADER_FONT)
     header.pack(pady=20)
 
-    btn_predict = tk.Button(root, text="Nhận Diện Từ Webcam", command=on_predict)
+    progress_bar = ttk.Progressbar(root, orient="horizontal", length=400, mode="indeterminate")
+    progress_bar.pack(pady=20)
+
+    btn_predict = tk.Button(root, text="Nhận Diện Từ Webcam", command=lambda: on_predict(progress_bar))
     apply_styles(btn_predict, {"bg": BUTTON_COLOR, "fg": BUTTON_TEXT_COLOR, "font": FONT})
     btn_predict.bind("<Enter>", lambda event: on_hover(event, btn_predict))
     btn_predict.bind("<Leave>", lambda event: on_leave(event, btn_predict))
     btn_predict.pack(pady=20)
 
-    btn_reverse = tk.Button(root, text="Nhận Diện Từ Giọng Nói", command=on_reverse_recognition)
+    btn_reverse = tk.Button(root, text="Nhận Diện Từ Giọng Nói", command=lambda: on_reverse_recognition(progress_bar))
     apply_styles(btn_reverse, {"bg": BUTTON_COLOR, "fg": BUTTON_TEXT_COLOR, "font": FONT})
     btn_reverse.bind("<Enter>", lambda event: on_hover(event, btn_reverse))
     btn_reverse.bind("<Leave>", lambda event: on_leave(event, btn_reverse))

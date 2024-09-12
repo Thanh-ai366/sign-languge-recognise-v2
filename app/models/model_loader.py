@@ -1,10 +1,8 @@
-import pickle
+import tensorflow as tf
 
 def save_model(model, file_path):
-    with open(file_path, 'wb') as file:
-        pickle.dump(model, file)
+    model.save(file_path)  # Lưu toàn bộ mô hình
 
 def load_model(file_path):
-    with open(file_path, 'rb') as file:
-        model = pickle.load(file)
-    return model
+    return tf.keras.models.load_model(file_path)  # Tải lại toàn bộ mô hình
+

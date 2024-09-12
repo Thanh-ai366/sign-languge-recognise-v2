@@ -1,5 +1,6 @@
 import csv
 from datetime import datetime
+import os
 
 class DataLogger:
     def __init__(self, file_path):
@@ -13,17 +14,16 @@ class DataLogger:
                 writer.writerow(self.headers)
 
     def _file_exists(self):
-        try:
-            with open(self.file_path, mode='r'):
-                return True
-        except FileNotFoundError:
-            return False
+        return os.path.exists(self.file_path)
 
     def log(self, sign, accuracy, time_taken):
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        with open(self.file_path, mode='a', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow([timestamp, sign, accuracy, time_taken])
+        try:
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            with open(self.file_path, mode='a', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow([timestamp, sign, accuracy, time_taken])
+        except Exception as e:
+            print(f"Lỗi khi ghi dữ liệu: {e}")
 
 # Sử dụng DataLogger
 if __name__ == "__main__":

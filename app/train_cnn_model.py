@@ -9,6 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from models.cnn_model import create_cnn_model
 from models.model_loader import save_model
 from app.utils import preprocess_image, create_directory
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
 # Cấu hình logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Đường dẫn tới thư mục dữ liệu và thư mục lưu trữ mô hình
 processed_dir = "data/processed/"
-model_path = "data/saved_models/cnn_model.h5"  # Đổi đuôi mở rộng sang .h5
+model_path = "data/saved_models/cnn_model.h5"
 
 # Tạo thư mục lưu trữ mô hình đã huấn luyện nếu chưa tồn tại
 create_directory(os.path.dirname(model_path))
@@ -93,9 +94,19 @@ logger.info(f"Training data shape: {X_train.shape}, Test data shape: {X_test.sha
 # Tạo mô hình CNN
 model = create_cnn_model(input_shape=(64, 64, 1), num_classes=36)
 
+# Tạo callback cho Early Stopping và Learning Rate Scheduler
+early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3)
+callbacks = [early_stopping, lr_scheduler]
+
 # Huấn luyện mô hình
 logger.info("Starting model training")
-history = model.fit(X_train, y_train, epochs=20, validation_data=(X_test, y_test))
+history = model.fit(
+    X_train, y_train,
+    epochs=20,
+    validation_data=(X_test, y_test),
+    callbacks=callbacks
+)
 
 # Lưu mô hình sau khi huấn luyện
 save_model(model, model_path)

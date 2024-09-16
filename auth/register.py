@@ -2,7 +2,7 @@ import bcrypt
 import json
 import os
 
-class UserManager:
+class Register:
     def __init__(self, user_db="data/users.json"):
         self.user_db = user_db
         self.load_users()
@@ -27,8 +27,8 @@ class UserManager:
         self.save_users()
         return "Đăng ký thành công!"
 
-# Sử dụng UserManager để đăng ký người dùng mới
+# Sử dụng Register để đăng ký người dùng mới
 if __name__ == "__main__":
-    user_manager = UserManager()
+    user_manager = Register()
     response = user_manager.register("new_user", "secure_password")
     print(response)

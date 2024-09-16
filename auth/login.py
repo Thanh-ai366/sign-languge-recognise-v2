@@ -5,7 +5,7 @@ import jwt
 from datetime import datetime, timedelta
 
 # Khóa bảo mật cho JWT (lưu trữ ở nơi an toàn)
-SECRET_KEY = "your_secret_key"
+SECRET_KEY = os.getenv("SECRET_KEY", "fallback_secret_key")
 
 class UserManager:
     def __init__(self, user_db="data/users.json"):

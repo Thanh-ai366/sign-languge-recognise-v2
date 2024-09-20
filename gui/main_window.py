@@ -1,59 +1,52 @@
-import tkinter as tk
-from tkinter import messagebox, ttk
-from gui.styles import BG_COLOR, BUTTON_COLOR, BUTTON_TEXT_COLOR, TEXT_COLOR, FONT, HEADER_FONT, apply_styles, on_hover, on_leave
-from app.main import start_prediction, start_reverse_recognition
+# main_window.py
+from PyQt5.QtWidgets import QWidget, QLabel, QPushButton, QVBoxLayout
+from app.prediction import SignLanguagePredictor
+from styles import AppStyles  # Import style từ styles.py
 
-cnn_model = None
+class MainWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
 
-def load_cnn_model():
-    global cnn_model
-    if cnn_model is None:
-        cnn_model = ...  # Hàm load mô hình CNN
+    def initUI(self):
+        self.setWindowTitle('Giao diện dự đoán ký hiệu')
+        self.setGeometry(100, 100, 800, 600)
 
-def on_predict(progress_bar):
-    load_cnn_model()
-    progress_bar.start()
-    start_prediction(cnn_model)
-    progress_bar.stop()
-    on_action_completed('Nhận diện từ webcam')
+        # Áp dụng style sheet
+        self.setStyleSheet(AppStyles.main_window)
 
-def on_reverse_recognition(progress_bar):
-    progress_bar.start()
-    start_reverse_recognition()
-    progress_bar.stop()
-    on_action_completed('Nhận diện từ giọng nói')
+        layout = QVBoxLayout()
 
-def on_action_completed(action):
-    messagebox.showinfo("Hoàn thành", f"Hành động {action} đã hoàn thành")
+        # Tạo nhãn tiêu đề
+        self.label = QLabel('Dự đoán ký hiệu ngôn ngữ', self)
+        layout.addWidget(self.label)
 
-def create_main_window():
-    root = tk.Tk()
-    root.title("Phần Mềm Nhận Diện Ngôn Ngữ Ký Hiệu")
-    root.geometry("600x400")
-    root.configure(bg=BG_COLOR)
+        # Nút bắt đầu dự đoán
+        self.start_button = QPushButton('Bắt đầu dự đoán', self)
+        self.start_button.clicked.connect(self.start_prediction)
+        layout.addWidget(self.start_button)
 
-    header = tk.Label(root, text="Nhận Diện Ngôn Ngữ Ký Hiệu", fg=TEXT_COLOR, bg=BG_COLOR, font=HEADER_FONT)
-    header.pack(pady=20)
+        # Nút dừng dự đoán
+        self.stop_button = QPushButton('Dừng dự đoán', self)
+        self.stop_button.setEnabled(False)  # Vô hiệu hóa nút dừng ban đầu
+        self.stop_button.clicked.connect(self.stop_prediction)
+        layout.addWidget(self.stop_button)
 
-    progress_bar = ttk.Progressbar(root, orient="horizontal", length=400, mode="indeterminate")
-    progress_bar.pack(pady=20)
+        self.setLayout(layout)
 
-    btn_predict = tk.Button(root, text="Nhận Diện Từ Webcam", command=lambda: on_predict(progress_bar))
-    apply_styles(btn_predict, {"bg": BUTTON_COLOR, "fg": BUTTON_TEXT_COLOR, "font": FONT})
-    btn_predict.bind("<Enter>", lambda event: on_hover(event, btn_predict))
-    btn_predict.bind("<Leave>", lambda event: on_leave(event, btn_predict))
-    btn_predict.pack(pady=20)
+    def start_prediction(self):
+        self.predictor = SignLanguagePredictor()
+        self.predictor.run()
+        
+        # Cập nhật giao diện
+        self.label.setText("Đang dự đoán...")
+        self.start_button.setEnabled(False)
+        self.stop_button.setEnabled(True)
 
-    btn_reverse = tk.Button(root, text="Nhận Diện Từ Giọng Nói", command=lambda: on_reverse_recognition(progress_bar))
-    apply_styles(btn_reverse, {"bg": BUTTON_COLOR, "fg": BUTTON_TEXT_COLOR, "font": FONT})
-    btn_reverse.bind("<Enter>", lambda event: on_hover(event, btn_reverse))
-    btn_reverse.bind("<Leave>", lambda event: on_leave(event, btn_reverse))
-    btn_reverse.pack(pady=20)
+    def stop_prediction(self):
+        self.predictor.stop()
 
-    info_label = tk.Label(root, text="Chọn chức năng bạn muốn thực hiện", fg=TEXT_COLOR, bg=BG_COLOR, font=FONT)
-    info_label.pack(pady=10)
-
-    root.mainloop()
-
-if __name__ == "__main__":
-    create_main_window()
+        # Cập nhật giao diện
+        self.label.setText("Dự đoán đã dừng.")
+        self.start_button.setEnabled(True)
+        self.stop_button.setEnabled(False)

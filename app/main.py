@@ -1,39 +1,28 @@
-import tkinter as tk
-from tkinter import messagebox
-import pyttsx3
 import sys
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, 
+                             QVBoxLayout, QWidget, QMessageBox, QStackedWidget)
+from PyQt5.QtGui import QPixmap, QPalette, QBrush, QFont
+from PyQt5.QtCore import Qt, QPropertyAnimation, QRect
+from PyQt5.QtChart import QChart, QChartView, QBarSeries, QBarSet, QBarCategoryAxis, QValueAxis
+from PyQt5.QtGui import QPainter
+import pyttsx3
 import os
 import threading
 from dotenv import load_dotenv
 from app.prediction import SignLanguagePredictor
 from auth.register import Register
 from auth.login import UserManager
-from auth.user_data import UserData
 
 # Load environment variables
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 
 def set_tts_options(engine):
-    speed = tk.IntVar(value=150)  # Tốc độ mặc định
-    tk.Label(root, text="Tốc độ phát âm").pack()
-    speed_scale = tk.Scale(root, from_=100, to=300, orient=tk.HORIZONTAL, variable=speed)
-    speed_scale.pack()
-    
-    language_var = tk.StringVar(value='vi')  # Ngôn ngữ mặc định là tiếng Việt
-    tk.Label(root, text="Ngôn ngữ phát âm").pack()
-    language_menu = tk.OptionMenu(root, language_var, 'vi', 'en')
-    language_menu.pack()
+    speed = 150  # Default speed
+    language = 'vi'  # Default language
 
-    def apply_tts_settings():
-        engine.setProperty('rate', speed.get())
-        if language_var.get() == 'en':
-            engine.setProperty('voice', 'com.apple.speech.synthesis.voice.Alex')  # Tiếng Anh
-        else:
-            engine.setProperty('voice', 'com.apple.speech.synthesis.voice.Yuna')  # Tiếng Việt
-
-    speed.trace_add("write", lambda *args: apply_tts_settings())
-    language_var.trace_add("write", lambda *args: apply_tts_settings())
+    engine.setProperty('rate', speed)
+    engine.setProperty('voice', 'com.apple.speech.synthesis.voice.Yuna')  # Vietnamese voice
 
 def start_prediction():
     model_path = "app/data/saved_models/cnn_model.h5"
@@ -42,74 +31,283 @@ def start_prediction():
     predictor = SignLanguagePredictor(model_path, labels_dict)
     predictor.run()
 
-def on_closing():
-    if messagebox.askokcancel("Thoát", "Bạn có chắc muốn thoát không?"):
-        root.destroy()
+class LoginWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
 
-def login():
-    def authenticate():
-        username = username_entry.get()
-        password = password_entry.get()
+    def initUI(self):
+        self.setWindowTitle('Đăng nhập')
+        self.setGeometry(100, 100, 400, 300)
+        self.setAutoFillBackground(True)
+        palette = self.palette()
+        background_image = QPixmap("path/to/login_background.jpg")  
+        palette.setBrush(QPalette.Window, QBrush(background_image.scaled(self.size(), 
+            Qt.IgnoreAspectRatio, Qt.SmoothTransformation)))
+        self.setPalette(palette)
+
+        layout = QVBoxLayout()
+        title = QLabel('Đăng nhập vào hệ thống', self)
+        title.setFont(QFont('Arial', 24, QFont.Bold))
+        title.setStyleSheet("color: white;")
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+
+        self.username_entry = QLineEdit(self)
+        self.username_entry.setPlaceholderText("Tên người dùng")
+        self.username_entry.setStyleSheet("padding: 10px; background-color: #F0F0F0; border-radius: 5px;")
+        layout.addWidget(self.username_entry)
+
+        self.password_entry = QLineEdit(self)
+        self.password_entry.setPlaceholderText("Mật khẩu")
+        self.password_entry.setEchoMode(QLineEdit.Password)
+        self.password_entry.setStyleSheet("padding: 10px; background-color: #F0F0F0; border-radius: 5px;")
+        layout.addWidget(self.password_entry)
+
+        login_button = QPushButton('Đăng nhập', self)
+        login_button.setStyleSheet("background-color: #4CAF50; color: white; padding: 10px; border-radius: 5px; font-size: 16px;")
+        login_button.clicked.connect(self.login)
+        layout.addWidget(login_button)
+
+        register_button = QPushButton('Đăng ký', self)
+        register_button.setStyleSheet("background-color: #2196F3; color: white; padding: 10px; border-radius: 5px; font-size: 16px;")
+        register_button.clicked.connect(self.open_register_window)
+        layout.addWidget(register_button)
+
+        self.setLayout(layout)
+
+    def login(self):
+        username = self.username_entry.text()
+        password = self.password_entry.text()
         user_manager = UserManager()
+        
+        threading.Thread(target=self.authenticate, args=(user_manager, username, password)).start()
+
+    def authenticate(self, user_manager, username, password):
         response = user_manager.login(username, password)
-        loading_spinner.pack_forget()
         if "Token:" in response:
-            user_data = UserData(username)
-            start_prediction()
+            QMessageBox.information(self, 'Đăng nhập thành công', 'Đăng nhập thành công')
+            self.open_main_app()
         else:
-            messagebox.showerror("Đăng nhập thất bại", response)
-    
-    # Hiển thị loading spinner khi đang xác thực
-    loading_spinner.pack()
-    threading.Thread(target=authenticate).start()
+            QMessageBox.critical(self, 'Đăng nhập thất bại', response)
 
-def open_register_window():
-    register_window = tk.Toplevel(root)
-    register_window.title("Đăng Ký")
-    register_window.geometry("300x200")
+    def open_register_window(self):
+        self.register_window = RegisterWindow()
+        self.register_window.show()
 
-    tk.Label(register_window, text="Tên người dùng (Đăng ký)").pack()
-    register_username_entry = tk.Entry(register_window)
-    register_username_entry.pack()
-    tk.Label(register_window, text="Mật khẩu (Đăng ký)").pack()
-    register_password_entry = tk.Entry(register_window, show="*")
-    register_password_entry.pack()
+    def open_main_app(self):
+        self.main_app = MainApp()
+        self.main_app.show()
+        self.close()
 
-    def register():
-        username = register_username_entry.get()
-        password = register_password_entry.get()
+class RegisterWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle('Đăng ký')
+        self.setGeometry(150, 150, 300, 200)
+
+        layout = QVBoxLayout()
+        self.username_entry = QLineEdit(self)
+        self.username_entry.setPlaceholderText("Tên người dùng")
+        layout.addWidget(self.username_entry)
+
+        self.password_entry = QLineEdit(self)
+        self.password_entry.setPlaceholderText("Mật khẩu")
+        self.password_entry.setEchoMode(QLineEdit.Password)
+        layout.addWidget(self.password_entry)
+
+        register_button = QPushButton('Đăng ký', self)
+        register_button.clicked.connect(self.register)
+        layout.addWidget(register_button)
+
+        self.setLayout(layout)
+
+    def register(self):
+        username = self.username_entry.text()
+        password = self.password_entry.text()
         user_manager = Register()
         response = user_manager.register(username, password)
-        messagebox.showinfo("Đăng ký", response)
-        register_window.destroy()
+        QMessageBox.information(self, 'Đăng ký', response)
+        self.close()
 
-    register_button = tk.Button(register_window, text="Đăng ký", command=register)
-    register_button.pack(pady=20)
+class MainApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.dark_mode = False
+        self.initUI()
 
-root = tk.Tk()
-root.title("Phần Mềm Nhận Diện Ngôn Ngữ Ký Hiệu")
-root.geometry("400x600")
+    def initUI(self):
+        self.setWindowTitle('Phần mềm nhận diện ký hiệu')
+        self.setGeometry(100, 100, 800, 600)
 
-engine = pyttsx3.init()
-set_tts_options(engine)
+        self.toggle_theme_button = QPushButton('Chuyển sang Dark Mode', self)
+        self.toggle_theme_button.setGeometry(700, 10, 90, 30)
+        self.toggle_theme_button.clicked.connect(self.toggle_theme)
 
-# Giao diện đăng nhập
-tk.Label(root, text="Tên người dùng").pack()
-username_entry = tk.Entry(root)
-username_entry.pack()
-tk.Label(root, text="Mật khẩu").pack()
-password_entry = tk.Entry(root, show="*")
-password_entry.pack()
+        self.central_widget = QStackedWidget()
+        self.setCentralWidget(self.central_widget)
 
-login_button = tk.Button(root, text="Đăng nhập", command=login)
-login_button.pack(pady=20)
+        self.home_screen = QWidget()
+        self.home_layout = QVBoxLayout()
 
-# Thêm loading spinner khi xác thực
-loading_spinner = tk.Label(root, text="Đang xử lý...")
-loading_spinner.pack_forget()
+        title = QLabel("Chọn chức năng", self)
+        title.setFont(QFont('Arial', 24, QFont.Bold))
+        title.setAlignment(Qt.AlignCenter)
+        self.home_layout.addWidget(title)
 
-register_button = tk.Button(root, text="Đăng ký", command=open_register_window)
-register_button.pack(pady=20)
+        predict_button = QPushButton("Dự đoán ký hiệu", self)
+        predict_button.setStyleSheet("padding: 10px; background-color: #4CAF50; color: white; border-radius: 5px; font-size: 16px;")
+        predict_button.clicked.connect(self.open_predict_screen)
+        self.home_layout.addWidget(predict_button)
 
-root.protocol("WM_DELETE_WINDOW", on_closing)
-root.mainloop()
+        feedback_button = QPushButton("Phản hồi", self)
+        feedback_button.setStyleSheet("padding: 10px; background-color: #FF9800; color: white; border-radius: 5px; font-size: 16px;")
+        feedback_button.clicked.connect(self.open_feedback_screen)
+        self.home_layout.addWidget(feedback_button)
+
+        analytics_button = QPushButton("Phân tích dữ liệu", self)
+        analytics_button.setStyleSheet("padding: 10px; background-color: #2196F3; color: white; border-radius: 5px; font-size: 16px;")
+        analytics_button.clicked.connect(self.open_analytics_screen)
+        self.home_layout.addWidget(analytics_button)
+
+        self.home_screen.setLayout(self.home_layout)
+        self.central_widget.addWidget(self.home_screen)
+
+        self.predict_screen = PredictScreen()
+        self.central_widget.addWidget(self.predict_screen)
+
+        self.feedback_screen = FeedbackScreen()
+        self.central_widget.addWidget(self.feedback_screen)
+
+        self.analytics_screen = AnalyticsScreen()
+        self.central_widget.addWidget(self.analytics_screen)
+
+    def toggle_theme(self):
+        if not self.dark_mode:
+            self.setStyleSheet("""
+                QWidget { background-color: #2b2b2b; color: #FFFFFF; }
+                QPushButton { background-color: #4CAF50; color: white; }
+            """)
+            self.toggle_theme_button.setText('Chuyển sang Light Mode')
+        else:
+            self.setStyleSheet("""
+                QWidget { background-color: white; color: black; }
+                QPushButton { background-color: #4CAF50; color: white; }
+            """)
+            self.toggle_theme_button.setText('Chuyển sang Dark Mode')
+
+        self.dark_mode = not self.dark_mode
+
+    def open_predict_screen(self):
+        self.central_widget.setCurrentWidget(self.predict_screen)
+
+    def open_feedback_screen(self):
+        self.central_widget.setCurrentWidget(self.feedback_screen)
+
+    def open_analytics_screen(self):
+        self.central_widget.setCurrentWidget(self.analytics_screen)
+
+class PredictScreen(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+
+    def initUI(self):
+        layout = QVBoxLayout()
+        self.status_label = QLabel("Nhấn nút để bắt đầu dự đoán", self)
+        layout.addWidget(self.status_label)
+
+        start_button = QPushButton("Bắt đầu dự đoán", self)
+        start_button.clicked.connect(self.start_prediction)
+        layout.addWidget(start_button)
+
+        self.setLayout(layout)
+
+    def start_prediction(self):
+        self.status_label.setText("Đang dự đoán...")
+        threading.Thread(target=start_prediction).start()
+class FeedbackScreen(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+
+    def initUI(self):
+        layout = QVBoxLayout()
+
+        self.feedback_label = QLabel("Nhập phản hồi của bạn:", self)
+        layout.addWidget(self.feedback_label)
+
+        self.feedback_entry = QLineEdit(self)
+        layout.addWidget(self.feedback_entry)
+
+        send_button = QPushButton("Gửi phản hồi", self)
+        send_button.clicked.connect(self.send_feedback)
+        layout.addWidget(send_button)
+
+        self.setLayout(layout)
+
+    def send_feedback(self):
+        feedback = self.feedback_entry.text()
+        if feedback:
+            QMessageBox.information(self, "Phản hồi", "Phản hồi của bạn đã được gửi.")
+            self.feedback_entry.clear()
+        else:
+            QMessageBox.warning(self, "Lỗi", "Vui lòng nhập phản hồi.")
+
+class AnalyticsScreen(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+
+    def initUI(self):
+        layout = QVBoxLayout()
+
+        chart_label = QLabel("Phân tích dữ liệu người dùng:", self)
+        layout.addWidget(chart_label)
+
+        self.chart_view = self.create_chart()
+        layout.addWidget(self.chart_view)
+
+        self.setLayout(layout)
+
+    def create_chart(self):
+        # Dummy data
+        set0 = QBarSet("Người dùng mới")
+        set1 = QBarSet("Người dùng đăng nhập")
+
+        set0 << 1 << 2 << 3 << 4 << 5 << 6
+        set1 << 5 << 0 << 0 << 4 << 0 << 7
+
+        series = QBarSeries()
+        series.append(set0)
+        series.append(set1)
+
+        chart = QChart()
+        chart.addSeries(series)
+        chart.setTitle("Phân tích người dùng theo tháng")
+        chart.setAnimationOptions(QChart.SeriesAnimations)
+
+        categories = ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6"]
+        axisX = QBarCategoryAxis()
+        axisX.append(categories)
+        chart.addAxis(axisX, Qt.AlignBottom)
+        series.attachAxis(axisX)
+
+        axisY = QValueAxis()
+        axisY.setRange(0, 10)
+        chart.addAxis(axisY, Qt.AlignLeft)
+        series.attachAxis(axisY)
+
+        chart_view = QChartView(chart)
+        chart_view.setRenderHint(QPainter.Antialiasing)
+
+        return chart_view
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    login_window = LoginWindow()
+    login_window.show()
+    sys.exit(app.exec_())

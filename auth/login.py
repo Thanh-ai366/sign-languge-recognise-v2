@@ -1,62 +1,59 @@
 import bcrypt
-import json
-import os
 import jwt
+import os
+from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
-# Khóa bảo mật cho JWT (lưu trữ ở nơi an toàn)
-SECRET_KEY = os.getenv("SECRET_KEY", "fallback_secret_key")
+load_dotenv()
+
+SECRET_KEY = os.getenv("SECRET_KEY")
 
 class UserManager:
-    def __init__(self, user_db="data/users.json"):
-        self.user_db = user_db
-        self.load_users()
+    def __init__(self):
+        self.users = self.load_users()
 
     def load_users(self):
-        if os.path.exists(self.user_db):
-            with open(self.user_db, 'r') as file:
-                self.users = json.load(file)
-        else:
-            self.users = {}
-
-    def save_users(self):
-        with open(self.user_db, 'w') as file:
-            json.dump(self.users, file, indent=4)
+        # Giả lập dữ liệu người dùng từ file JSON hoặc cơ sở dữ liệu
+        return {
+            "user1": bcrypt.hashpw("password123".encode('utf-8'), bcrypt.gensalt()).decode('utf-8'),
+            "user2": bcrypt.hashpw("mypassword".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        }
 
     def login(self, username, password):
         if username not in self.users:
-            return "Tên người dùng không tồn tại."
-
-        if bcrypt.checkpw(password.encode(), self.users[username]["password"].encode()):
-            # Đăng nhập thành công, tạo JWT
+            return "Tên đăng nhập không tồn tại"
+        
+        stored_password_hash = self.users[username]
+        if bcrypt.checkpw(password.encode('utf-8'), stored_password_hash.encode('utf-8')):
             token = self.create_jwt(username)
-            return f"Đăng nhập thành công! Token: {token}"
+            return f"Token: {token}"
         else:
-            return "Mật khẩu không chính xác."
+            return "Mật khẩu không đúng"
 
     def create_jwt(self, username):
-        # Tạo JWT với thời gian hết hạn 1 giờ
+        expiration_time = datetime.utcnow() + timedelta(hours=1)
         payload = {
-            "username": username,
-            "exp": datetime.utcnow() + timedelta(hours=1)  # Token hết hạn sau 1 giờ
+            'username': username,
+            'exp': expiration_time
         }
-        return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+        token = jwt.encode(payload, SECRET_KEY, algorithm='HS256')
+        return token
 
     def verify_jwt(self, token):
         try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-            return payload["username"]
+            payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+            return payload['username'], None
         except jwt.ExpiredSignatureError:
-            return "Token đã hết hạn."
+            return None, "Token đã hết hạn"
         except jwt.InvalidTokenError:
-            return "Token không hợp lệ."
+            return None, "Token không hợp lệ"
 
-# Sử dụng UserManager để đăng nhập và xác thực
-if __name__ == "__main__":
-    user_manager = UserManager()
-    response = user_manager.login("new_user", "secure_password")
-    print(response)
-    
-    # Ví dụ kiểm tra token
-    token = response.split("Token: ")[1]  # Lấy token từ chuỗi phản hồi
-    print(user_manager.verify_jwt(token))
+    def check_permission(self, username, required_role):
+        # Giả lập kiểm tra quyền truy cập, có thể thay bằng truy vấn cơ sở dữ liệu
+        user_roles = {
+            "user1": "admin",
+            "user2": "user"
+        }
+        if username in user_roles and user_roles[username] == required_role:
+            return True
+        return False

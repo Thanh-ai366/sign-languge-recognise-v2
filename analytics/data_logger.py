@@ -7,6 +7,11 @@ class DataLogger:
         self.file_path = file_path
         self.headers = ["Timestamp", "Sign", "Accuracy", "Time Taken"]
 
+        # Kiểm tra xem thư mục chứa tệp có tồn tại không, nếu không thì tạo mới
+        directory = os.path.dirname(self.file_path)
+        if not os.path.exists(directory):
+            os.makedirs(directory)  # Tạo thư mục nếu chưa tồn tại
+
         # Tạo tệp và ghi header nếu tệp chưa tồn tại
         if not self._file_exists():
             with open(self.file_path, mode='w', newline='') as file:

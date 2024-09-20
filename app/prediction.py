@@ -1,30 +1,38 @@
 import cv2
 import numpy as np
 import pyttsx3
-from app.utils import preprocess_image
-from models.cnn_model import create_cnn_model
+from app.utils import preprocess_image  # Nếu có sử dụng
 from models.model_loader import load_model
 from analytics.data_logger import DataLogger
+import threading
 
 class SignLanguagePredictor:
-    def __init__(self, model_path, labels_dict, input_shape=(64, 64, 1), num_classes=36):
+    def __init__(self, model_path, labels_dict):
         self.model_path = model_path
         self.labels_dict = labels_dict
-        self.model = create_cnn_model(input_shape=input_shape, num_classes=num_classes)
-        self.load_model()
-        
-        # Khởi tạo TTS
+        self.model = self.load_model()
         self.engine = pyttsx3.init()
-        self.engine.setProperty('rate', 150)  # Điều chỉnh tốc độ nói
-
-        # Khởi tạo DataLogger để ghi lại dữ liệu sử dụng
+        self.engine.setProperty('rate', 150)
         self.logger = DataLogger("data/logs/sign_usage.csv")
+        self.cap = cv2.VideoCapture(0)  # Sử dụng webcam mặc định
+        self.running = True
 
     def load_model(self):
-        self.model = load_model(self.model_path)
+        try:
+            model = load_model(self.model_path)
+            print(f"Mô hình đã được tải thành công từ {self.model_path}")
+            return model
+        except Exception as e:
+            print(f"Lỗi khi tải mô hình: {e}")
+            return None
+
+    def preprocess_frame(self, frame):
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        resized_frame = cv2.resize(gray_frame, (64, 64))
+        return resized_frame / 255.0  # Chuẩn hóa hình ảnh
 
     def predict(self, image):
-        image = image.reshape((1, 64, 64, 1))
+        image = image.reshape((1, 64, 64, 1))  # Định dạng cho mô hình
         prediction = self.model.predict(image)
         predicted_label = np.argmax(prediction)
         return self.labels_dict[predicted_label]
@@ -33,42 +41,44 @@ class SignLanguagePredictor:
         self.engine.say(text)
         self.engine.runAndWait()
 
-    def run(self):
-        cap = cv2.VideoCapture(0)
-        if not cap.isOpened():
-            print("Không thể truy cập webcam.")
-            return
+    def start_prediction_thread(self):
+        previous_sign = None
+        prediction_delay = 30
+        frame_count = 0
         
-        # Mở tệp văn bản để ghi kết quả dự đoán
         with open("sign_predictions.txt", "w") as file:
-            while True:
-                ret, frame = cap.read()
+            while self.running:
+                ret, frame = self.cap.read()
                 if not ret:
                     print("Không thể nhận diện frame từ webcam.")
                     break
 
-                gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                resized_frame = cv2.resize(gray_frame, (64, 64))
-                normalized_frame = resized_frame / 255.0
-
-                # Dự đoán ký hiệu
+                normalized_frame = self.preprocess_frame(frame)
                 predicted_sign = self.predict(normalized_frame)
-                
-                # Ghi lại dữ liệu sử dụng
-                self.logger.log(predicted_sign, 1.0, 0.5)  # Thời gian thực hiện và độ chính xác giả định
 
-                # Hiển thị kết quả dự đoán trên màn hình theo thời gian thực
+                self.logger.log(predicted_sign, 1.0, 0.5)  # Ghi lại dữ liệu sử dụng
+
                 cv2.putText(frame, f"Ký hiệu: {predicted_sign}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                 cv2.imshow("Webcam", frame)
 
-                # Phát âm lời nói từ ký hiệu
-                self.speak(predicted_sign)
+                frame_count += 1
+                if predicted_sign != previous_sign and frame_count >= prediction_delay:
+                    self.speak(predicted_sign)
+                    previous_sign = predicted_sign
+                    frame_count = 0
 
-                # Tự động lưu kết quả dự đoán vào tệp văn bản
                 file.write(f"{predicted_sign}\n")
 
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
-        cap.release()
+        self.cleanup()
+
+    def cleanup(self):
+        self.cap.release()
         cv2.destroyAllWindows()
+
+    def run(self):
+        prediction_thread = threading.Thread(target=self.start_prediction_thread)
+        prediction_thread.start()
+

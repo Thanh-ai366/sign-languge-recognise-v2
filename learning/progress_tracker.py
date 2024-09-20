@@ -1,50 +1,56 @@
 import json
-import os
+from datetime import datetime
 
 class ProgressTracker:
-    def __init__(self, user_id, data_dir="data/progress/"):
-        self.user_id = user_id
-        self.data_dir = data_dir
-        self.progress_file = os.path.join(data_dir, f"{user_id}_progress.json")
-        self.progress = self.load_progress()
+    def __init__(self, username, progress_file="learning/progress_data.json"):
+        self.username = username
+        self.progress_file = progress_file
+        self.progress_data = self.load_progress_data()
 
-    def load_progress(self):
-        if os.path.exists(self.progress_file):
+    def load_progress_data(self):
+        try:
             with open(self.progress_file, 'r') as file:
-                return json.load(file)
-        else:
+                all_progress = json.load(file)
+                return all_progress.get(self.username, {})
+        except FileNotFoundError:
+            return {}
+        except Exception as e:
+            print(f"Lỗi khi tải dữ liệu tiến độ: {e}")
             return {}
 
-    def save_progress(self):
-        with open(self.progress_file, 'w') as file:
-            json.dump(self.progress, file, indent=4)
+    def save_progress_data(self):
+        try:
+            with open(self.progress_file, 'r') as file:
+                all_progress = json.load(file)
+        except FileNotFoundError:
+            all_progress = {}
+        except Exception as e:
+            print(f"Lỗi khi tải dữ liệu tiến độ: {e}")
+            all_progress = {}
 
-    def update_progress(self, sign, accuracy, time_taken, repetitions, smoothness):
-        if sign not in self.progress:
-            self.progress[sign] = []
-        self.progress[sign].append({
-            "accuracy": accuracy,
-            "time_taken": time_taken,
-            "repetitions": repetitions,
-            "smoothness": smoothness
-        })
-        self.save_progress()
+        all_progress[self.username] = self.progress_data
 
-    def get_progress(self):
-        return self.progress
+        try:
+            with open(self.progress_file, 'w') as file:
+                json.dump(all_progress, file)
+            print("Dữ liệu tiến độ đã được lưu.")
+        except Exception as e:
+            print(f"Lỗi khi lưu dữ liệu tiến độ: {e}")
 
-    def generate_report(self):
-        report = []
-        for sign, data in self.progress.items():
-            report.append(f"Sign: {sign}")
-            for entry in data:
-                report.append(f"  Accuracy: {entry['accuracy']}, Time: {entry['time_taken']}, Repetitions: {entry['repetitions']}, Smoothness: {entry['smoothness']}")
-        return "\n".join(report)
+    def update_progress(self, lesson, accuracy):
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        progress_entry = {
+            'lesson': lesson,
+            'accuracy': accuracy,
+            'timestamp': timestamp
+        }
 
-# Sử dụng ProgressTracker để theo dõi tiến độ
-if __name__ == "__main__":
-    tracker = ProgressTracker("user_01")
-    tracker.update_progress("A", 0.95, 1.2, 10, 0.85)
-    tracker.update_progress("B", 0.85, 1.5, 8, 0.90)
-    print(tracker.get_progress())
-    print(tracker.generate_report())
+        self.progress_data[timestamp] = progress_entry
+        self.save_progress_data()
+
+    def get_progress_report(self):
+        report = [
+            f"Buổi học: {entry['lesson']}, Độ chính xác: {entry['accuracy']}, Thời gian: {entry['timestamp']}"
+            for entry in self.progress_data.values()
+        ]
+        return report

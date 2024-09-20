@@ -1,3 +1,5 @@
+import json
+
 class Lesson:
     def __init__(self, sign, instruction, level="Cơ bản", image_path=None):
         self.sign = sign
@@ -18,12 +20,36 @@ class Lesson:
         return self.level
 
 class LessonManager:
-    def __init__(self):
-        self.lessons = []
+    def __init__(self, lessons_file="learning/lessons_data.json"):
+        self.lessons_file = lessons_file
+        self.lessons = self.load_lessons()
+
+    def load_lessons(self):
+        try:
+            with open(self.lessons_file, 'r') as file:
+                lessons_data = json.load(file)
+                return [Lesson(sign, instruction, level) for level, signs in lessons_data.items() for sign, instruction in signs.items()]
+        except FileNotFoundError:
+            return []
+
+    def save_lessons(self):
+        lessons_data = {}
+        for lesson in self.lessons:
+            if lesson.get_level() not in lessons_data:
+                lessons_data[lesson.get_level()] = {}
+            lessons_data[lesson.get_level()][lesson.get_sign()] = lesson.get_instruction()
+        
+        try:
+            with open(self.lessons_file, 'w') as file:
+                json.dump(lessons_data, file)
+            print("Dữ liệu bài học đã được lưu.")
+        except Exception as e:
+            print(f"Lỗi khi lưu bài học: {e}")
 
     def add_lesson(self, sign, instruction, level="Cơ bản", image_path=None):
         lesson = Lesson(sign, instruction, level, image_path)
         self.lessons.append(lesson)
+        self.save_lessons()
 
     def get_lessons_by_level(self, level):
         return [lesson for lesson in self.lessons if lesson.get_level() == level]
@@ -31,7 +57,7 @@ class LessonManager:
     def get_lessons(self):
         return self.lessons
 
-# Sử dụng LessonManager để tạo các bài học với nhiều cấp độ
+# Sử dụng LessonManager
 if __name__ == "__main__":
     lesson_manager = LessonManager()
     lesson_manager.add_lesson("A", "Giơ tay lên và duỗi các ngón tay ra.", "Cơ bản", "images/A.png")

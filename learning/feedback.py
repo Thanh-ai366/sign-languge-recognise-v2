@@ -1,49 +1,63 @@
+import json
 import numpy as np
-from models.model_loader import load_model
+from datetime import datetime
 
-class FeedbackSystem:
-    def __init__(self, model_path, labels_dict):
-        self.model = load_model(model_path)
-        self.labels_dict = labels_dict
+class Feedback:
+    def __init__(self, username, feedback_file="learning/user_feedback.json"):
+        self.username = username
+        self.feedback_file = feedback_file
+        self.feedback_data = self.load_feedback_data()
 
-    def evaluate(self, image, correct_label):
-        # Thay đổi cấu trúc đầu vào của hình ảnh cho phù hợp với mô hình
-        image = image.reshape((1, 64, 64, 1))
-        prediction = self.model.predict(image)
-        predicted_label = np.argmax(prediction)
-        
-        feedback_message = ""
-        if predicted_label == correct_label:
-            feedback_message = "Chính xác! Ký hiệu của bạn rất tốt."
+    def load_feedback_data(self):
+        try:
+            with open(self.feedback_file, 'r') as file:
+                all_feedback = json.load(file)
+                return all_feedback.get(self.username, {})
+        except FileNotFoundError:
+            return {}
+        except Exception as e:
+            print(f"Lỗi khi tải phản hồi người dùng: {e}")
+            return {}
+
+    def save_feedback_data(self):
+        try:
+            with open(self.feedback_file, 'r') as file:
+                all_feedback = json.load(file)
+        except FileNotFoundError:
+            all_feedback = {}
+        except Exception as e:
+            print(f"Lỗi khi tải phản hồi người dùng: {e}")
+            all_feedback = {}
+
+        all_feedback[self.username] = self.feedback_data
+
+        try:
+            with open(self.feedback_file, 'w') as file:
+                json.dump(all_feedback, file)
+            print("Phản hồi của người dùng đã được lưu.")
+        except Exception as e:
+            print(f"Lỗi khi lưu phản hồi: {e}")
+
+    def give_feedback(self, actual_label, predicted_label):
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        feedback_entry = {
+            'timestamp': timestamp,
+            'actual': actual_label,
+            'predicted': predicted_label,
+            'correct': actual_label == predicted_label
+        }
+
+        if actual_label == predicted_label:
+            feedback_entry['suggestion'] = "Ký hiệu đúng. Tiếp tục luyện tập để duy trì phong độ!"
         else:
-            feedback_message = f"Ký hiệu chưa chính xác. Bạn cần cải thiện {self.get_improvement_suggestion(correct_label)}."
-        
-        # Thêm phần phân tích độ tự tin của mô hình
-        confidence = np.max(prediction) * 100
-        feedback_message += f"\nĐộ tự tin của mô hình: {confidence:.2f}%."
+            feedback_entry['suggestion'] = f"Ký hiệu sai. Bạn nên thực hiện động tác với độ chính xác cao hơn ở ngón tay và góc nhìn."
 
-        return feedback_message
+        self.feedback_data[timestamp] = feedback_entry
+        self.save_feedback_data()
 
-    def get_improvement_suggestion(self, correct_label):
-        # Gợi ý cải thiện cụ thể cho từng yếu tố
-        suggestion = f"cách đặt tay cho ký hiệu {self.labels_dict[correct_label]}"
-        improvement_areas = ["tốc độ", "sự mượt mà"]
-        
-        return f"{suggestion}, đặc biệt là {', '.join(improvement_areas)}."
-
-# Sử dụng hệ thống phản hồi
-if __name__ == "__main__":
-    model_path = "data/saved_models/cnn_model.h5"  # Đổi đuôi mở rộng sang .h5
-
-    # Ánh xạ nhãn: 0-9 cho số, 10-35 cho ký tự a-z
-    labels_dict = {i: str(i) for i in range(10)}
-    labels_dict.update({10 + i: chr(97 + i) for i in range(26)})
-
-    feedback_system = FeedbackSystem(model_path, labels_dict)
-
-    # Giả định user_image và correct_label đã được khởi tạo
-    # user_image = ...  # Hình ảnh do người dùng cung cấp
-    # correct_label = 0  # Ký hiệu đúng tương ứng với hình ảnh
-
-    # response = feedback_system.evaluate(user_image, correct_label)
-    # print(response)
+    def get_feedback_history(self):
+        history = [
+            f"Thời gian: {entry['timestamp']}, Thực tế: {entry['actual']}, Dự đoán: {entry['predicted']}, Đúng/Sai: {'Đúng' if entry['correct'] else 'Sai'}, Gợi ý: {entry['suggestion']}"
+            for entry in self.feedback_data.values()
+        ]
+        return history

@@ -2,14 +2,14 @@ import os
 import sys
 import numpy as np
 import logging
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, BatchNormalization
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
+from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.utils import to_categorical
 from sklearn.model_selection import train_test_split
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from models.cnn_model import create_cnn_model
-from models.model_loader import save_model
 from app.utils import preprocess_image, create_directory
-from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
 # Cấu hình logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -18,8 +18,6 @@ logger = logging.getLogger(__name__)
 # Đường dẫn tới thư mục dữ liệu và thư mục lưu trữ mô hình
 processed_dir = "data/processed/"
 model_path = "data/saved_models/cnn_model.h5"
-
-# Tạo thư mục lưu trữ mô hình đã huấn luyện nếu chưa tồn tại
 create_directory(os.path.dirname(model_path))
 
 # Tạo ImageDataGenerator cho Data Augmentation
@@ -33,9 +31,25 @@ datagen = ImageDataGenerator(
     fill_mode='nearest'
 )
 
-# Ánh xạ nhãn từ ký tự thành số (0-9 cho số, 10-35 cho chữ cái)
-label_mapping = {str(i): i for i in range(10)}  # Ánh xạ từ 0 đến 9 cho số
-label_mapping.update({chr(97 + i): 10 + i for i in range(26)})  # Ánh xạ từ a đến z (10 -> a, 35 -> z)
+def create_cnn_model(input_shape=(64, 64, 1), num_classes=36, optimizer='adam', learning_rate=0.001, dropout_rate=0.5):
+    model = Sequential()
+    model.add(Conv2D(32, (3, 3), activation='relu', input_shape=input_shape))
+    model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(BatchNormalization())
+    model.add(Dropout(dropout_rate))
+
+    model.add(Conv2D(64, (3, 3), activation='relu'))
+    model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(BatchNormalization())
+    model.add(Dropout(dropout_rate))
+
+    model.add(Flatten())
+    model.add(Dense(128, activation='relu'))
+    model.add(Dropout(dropout_rate))
+    model.add(Dense(num_classes, activation='softmax'))
+
+    model.compile(optimizer=Adam(learning_rate=learning_rate), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    return model
 
 def load_dataset():
     data = []
@@ -70,10 +84,7 @@ def augment_dataset(data, labels):
             aug_img = next(aug_iter).reshape((64, 64, 1))
             augmented_data.append(aug_img)
             augmented_labels.append(labels[i])
-    augmented_data = np.array(augmented_data)
-    augmented_labels = np.array(augmented_labels)
-    logger.info(f"Augmented dataset to {len(augmented_data)} samples")
-    return augmented_data, augmented_labels
+    return np.array(augmented_data), np.array(augmented_labels)
 
 # Tải và chuẩn bị dữ liệu
 data, labels = load_dataset()
@@ -92,7 +103,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 logger.info(f"Training data shape: {X_train.shape}, Test data shape: {X_test.shape}")
 
 # Tạo mô hình CNN
-model = create_cnn_model(input_shape=(64, 64, 1), num_classes=36)
+model = create_cnn_model()
 
 # Tạo callback cho Early Stopping và Learning Rate Scheduler
 early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
@@ -109,7 +120,7 @@ history = model.fit(
 )
 
 # Lưu mô hình sau khi huấn luyện
-save_model(model, model_path)
+model.save(model_path)
 logger.info(f"Model saved to {model_path}")
 
 # Ghi lại lịch sử huấn luyện

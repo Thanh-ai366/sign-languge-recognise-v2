@@ -2,32 +2,39 @@ import json
 import os
 
 class UserData:
-    def __init__(self, username, data_dir="data/user_data/"):
+    def __init__(self, username, data_file="auth/user_data.json"):
         self.username = username
-        self.data_dir = data_dir
-        self.user_file = os.path.join(data_dir, f"{username}_data.json")
+        self.data_file = data_file
         self.data = self.load_user_data()
 
     def load_user_data(self):
-        if os.path.exists(self.user_file):
-            with open(self.user_file, 'r') as file:
-                return json.load(file)
-        else:
+        try:
+            if os.path.exists(self.data_file):
+                with open(self.data_file, 'r') as f:
+                    all_data = json.load(f)
+                    return all_data.get(self.username, {})
+            else:
+                return {}
+        except Exception as e:
+            print(f"Lỗi khi tải dữ liệu người dùng: {e}")
             return {}
 
     def save_user_data(self):
-        with open(self.user_file, 'w') as file:
-            json.dump(self.data, file, indent=4)
+        try:
+            if os.path.exists(self.data_file):
+                with open(self.data_file, 'r') as f:
+                    all_data = json.load(f)
+            else:
+                all_data = {}
 
-    def update_user_data(self, key, value):
+            all_data[self.username] = self.data
+
+            with open(self.data_file, 'w') as f:
+                json.dump(all_data, f)
+            print("Dữ liệu người dùng đã được lưu.")
+        except Exception as e:
+            print(f"Lỗi khi lưu dữ liệu người dùng: {e}")
+
+    def update_data(self, key, value):
         self.data[key] = value
         self.save_user_data()
-
-    def get_user_data(self, key):
-        return self.data.get(key, None)
-
-# Sử dụng UserData để lưu trữ và truy xuất dữ liệu cá nhân
-if __name__ == "__main__":
-    user_data = UserData("new_user")
-    user_data.update_user_data("progress", {"A": 0.95, "B": 0.85})
-    print(user_data.get_user_data("progress"))

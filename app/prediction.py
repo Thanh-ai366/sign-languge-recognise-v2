@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import pyttsx3
-from app.utils import preprocess_image  # Nếu có sử dụng
+from app.utils import preprocess_image  
 from models.model_loader import load_model
 from analytics.data_logger import DataLogger
 import threading

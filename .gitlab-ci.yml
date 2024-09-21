@@ -1,0 +1,13 @@
+stages:
+  - build
+  - deploy
+
+build:
+  stage: build
+  script:
+    - docker build -t sign-language-api:latest .
+
+deploy:
+  stage: deploy
+  script:
+    - kubectl apply -f deployment.yaml

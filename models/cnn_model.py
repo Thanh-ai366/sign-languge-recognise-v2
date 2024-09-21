@@ -7,11 +7,12 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 def create_data_generator():
     datagen = ImageDataGenerator(
-        rotation_range=10,
-        width_shift_range=0.1,
-        height_shift_range=0.1,
-        shear_range=0.1,
-        zoom_range=0.1,
+        rotation_range=30,
+        width_shift_range=0.2,
+        height_shift_range=0.2,
+        shear_range=0.2,
+        zoom_range=0.2,
+        brightness_range=[0.2, 1.0],
         horizontal_flip=True,
         fill_mode='nearest'
     )
@@ -34,7 +35,7 @@ def create_cnn_model(input_shape=(64, 64, 1), num_classes=36):
 
     model.add(Flatten())
     model.add(Dense(256, activation='relu'))
-    model.add(Dropout(0.5))
+    model.add(Dropout(0.5))  # Thêm Dropout
     model.add(Dense(num_classes, activation='softmax'))
 
     optimizer = Adam(learning_rate=0.001)

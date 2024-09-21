@@ -35,8 +35,11 @@ class DatasetManager:
                         label = int(row[1])
                         if os.path.exists(img_path):
                             img = preprocess_image(img_path, size=(64, 64))
-                            data.append(img)
-                            labels.append(label)
+                            if img is not None:
+                                data.append(img)
+                                labels.append(label)
+                            else:
+                                print(f"Không thể tiền xử lý ảnh: {img_path}")
                         else:
                             print(f"Ảnh không tồn tại: {img_path}")
                 return np.array(data), np.array(labels)
@@ -50,8 +53,11 @@ class DatasetManager:
                     for img_file in os.listdir(label_dir):
                         img_path = os.path.join(label_dir, img_file)
                         image = preprocess_image(img_path, size=(64, 64))
-                        data.append(image)
-                        labels.append(label)
+                        if image is not None:
+                            data.append(image)
+                            labels.append(label)
+                        else:
+                            print(f"Không thể xử lý ảnh: {img_path}")
             return np.array(data), np.array(labels)
 
     def augment_dataset(self, data, labels):
@@ -65,25 +71,3 @@ class DatasetManager:
                 augmented_data.append(aug_img)
                 augmented_labels.append(labels[i])
         return np.array(augmented_data), np.array(augmented_labels)
-
-    def split_dataset(self, data, labels):
-        X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=self.test_size, stratify=labels)
-        return X_train, X_test, y_train, y_test
-
-    def save_processed_dataset(self, X_train, X_test, y_train, y_test):
-        np.save(os.path.join(self.processed_dir, 'X_train.npy'), X_train)
-        np.save(os.path.join(self.processed_dir, 'X_test.npy'), X_test)
-        np.save(os.path.join(self.processed_dir, 'y_train.npy'), y_train)
-        np.save(os.path.join(self.processed_dir, 'y_test.npy'), y_test)
-        print("Dữ liệu đã được lưu thành công!")
-
-    def load_processed_dataset(self):
-        try:
-            X_train = np.load(os.path.join(self.processed_dir, 'X_train.npy'))
-            X_test = np.load(os.path.join(self.processed_dir, 'X_test.npy'))
-            y_train = np.load(os.path.join(self.processed_dir, 'y_train.npy'))
-            y_test = np.load(os.path.join(self.processed_dir, 'y_test.npy'))
-            return X_train, X_test, y_train, y_test
-        except Exception as e:
-            print(f"Lỗi khi tải dữ liệu đã xử lý: {e}")
-            return None, None

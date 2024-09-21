@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sign-language-api-deployment
+spec:
+  replicas: 3  # Chạy 3 instance của API
+  selector:
+    matchLabels:
+      app: sign-language-api
+  template:
+    metadata:
+      labels:
+        app: sign-language-api
+    spec:
+      containers:
+      - name: sign-language-api
+        image: sign-language-api:latest  # Sử dụng image đã tạo với Docker
+        ports:
+        - containerPort: 5000

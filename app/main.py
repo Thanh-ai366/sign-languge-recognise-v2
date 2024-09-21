@@ -5,6 +5,7 @@ from PyQt5.QtGui import QPixmap, QPalette, QBrush, QFont
 from PyQt5.QtCore import Qt, QPropertyAnimation, QRect
 from PyQt5.QtChart import QChart, QChartView, QBarSeries, QBarSet, QBarCategoryAxis, QValueAxis
 from PyQt5.QtGui import QPainter
+from PyQt5.QtCore import QThread, pyqtSignal
 import pyttsx3
 import os
 import threading
@@ -16,6 +17,18 @@ from auth.login import UserManager
 # Load environment variables
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
+
+class PredictionThread(QThread):
+    update_status = pyqtSignal(str)  # Signal để cập nhật trạng thái GUI
+
+    def run(self):
+        model_path = "app/data/saved_models/cnn_model.h5"
+        labels_dict = {i: str(i) for i in range(10)}
+        labels_dict.update({10 + i: chr(97 + i) for i in range(26)})
+        
+        predictor = SignLanguagePredictor(model_path, labels_dict)
+        predictor.run()  # Giả định rằng hàm này bắt đầu quá trình dự đoán
+        self.update_status.emit("Dự đoán hoàn tất")
 
 def set_tts_options(engine):
     speed = 150  # Default speed
@@ -32,10 +45,13 @@ def start_prediction():
     predictor.run()
 
 class LoginWindow(QWidget):
+    auth_result_signal = pyqtSignal(str)
+
     def __init__(self):
         super().__init__()
         self.initUI()
-
+        self.auth_result_signal.connect(self.handle_auth_result) 
+    
     def initUI(self):
         self.setWindowTitle('Đăng nhập')
         self.setGeometry(100, 100, 400, 300)
@@ -66,7 +82,7 @@ class LoginWindow(QWidget):
 
         login_button = QPushButton('Đăng nhập', self)
         login_button.setStyleSheet("background-color: #4CAF50; color: white; padding: 10px; border-radius: 5px; font-size: 16px;")
-        login_button.clicked.connect(self.login)
+        login_button.clicked.connect(self.login)  # Sửa lỗi ở đây
         layout.addWidget(login_button)
 
         register_button = QPushButton('Đăng ký', self)
@@ -80,11 +96,14 @@ class LoginWindow(QWidget):
         username = self.username_entry.text()
         password = self.password_entry.text()
         user_manager = UserManager()
-        
+
         threading.Thread(target=self.authenticate, args=(user_manager, username, password)).start()
 
     def authenticate(self, user_manager, username, password):
         response = user_manager.login(username, password)
+        self.auth_result_signal.emit(response)  # Emit the result back to the main thread
+
+    def handle_auth_result(self, response):
         if "Token:" in response:
             QMessageBox.information(self, 'Đăng nhập thành công', 'Đăng nhập thành công')
             self.open_main_app()
@@ -221,13 +240,21 @@ class PredictScreen(QWidget):
         layout.addWidget(self.status_label)
 
         start_button = QPushButton("Bắt đầu dự đoán", self)
-        start_button.clicked.connect(self.start_prediction)
+        start_button.clicked.connect(self.start_prediction)  # Kết nối với hàm start_prediction
         layout.addWidget(start_button)
 
         self.setLayout(layout)
+   
+    def update_status_label(self, status):
+        self.status_label.setText(status)
+
 
     def start_prediction(self):
         self.status_label.setText("Đang dự đoán...")
+        self.prediction_thread = PredictionThread()  # Khởi tạo luồng dự đoán
+        self.prediction_thread.prediction_completed.connect(self.on_prediction_completed)  # Kết nối tín hiệu hoàn thành dự đoán
+        self.prediction_thread.start()  # Bắt đầu luồng
+
         threading.Thread(target=start_prediction).start()
 class FeedbackScreen(QWidget):
     def __init__(self):

@@ -1,0 +1,17 @@
+# Sử dụng Python 3.8 làm base image
+FROM python:3.8-slim
+
+# Cài đặt các thư viện cần thiết
+RUN pip install --upgrade pip
+COPY requirements.txt . 
+RUN pip install -r requirements.txt
+
+# Sao chép mã nguồn vào container
+COPY . /app
+WORKDIR /app
+
+# Mở cổng 5000 để chạy ứng dụng Flask
+EXPOSE 5000
+
+# Lệnh khởi động Flask API
+CMD ["python", "app/api.py"]

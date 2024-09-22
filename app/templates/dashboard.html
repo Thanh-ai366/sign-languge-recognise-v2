@@ -10,8 +10,10 @@
     <h1>Hiệu suất API theo thời gian</h1>
     <div id="line-chart"></div>
 
+    <!-- JavaScript truyền dữ liệu từ Flask vào biểu đồ Plotly -->
     <script>
-        var graphs = {{ graphJSON | safe }};
+        // Đảm bảo rằng dữ liệu được truyền đúng định dạng JSON từ Flask
+        var graphs = JSON.parse('{{ graphJSON | tojson | safe }}');
         Plotly.newPlot('line-chart', graphs);
     </script>
 </body>

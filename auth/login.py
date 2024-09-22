@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from argon2 import PasswordHasher, exceptions as argon2_exceptions
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, String, DateTime
+from .token import blacklist_token  # Import blacklist function
 
 # Cấu hình SQLAlchemy
 Base = declarative_base()
@@ -55,7 +56,7 @@ class UserManager:
 
         try:
             ph.verify(user.hashed_password, password)
-            return f"Token: {self.create_jwt(username)}"
+            return f"Token: {self.create_jwt(username)}, Refresh Token: {self.create_refresh_token(username)}"
         except argon2_exceptions.VerifyMismatchError:
             return "Mật khẩu không đúng"
 
@@ -67,6 +68,19 @@ class UserManager:
         }
         token = jwt.encode(payload, os.getenv("SECRET_KEY"), algorithm='HS256')
         return token
+
+    def create_refresh_token(self, username):
+        expiration_time = datetime.utcnow() + timedelta(days=7)
+        payload = {
+            'username': username,
+            'exp': expiration_time
+        }
+        refresh_token = jwt.encode(payload, os.getenv("SECRET_KEY"), algorithm='HS256')
+        return refresh_token
+
+    def logout(self, token):
+        jti = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=['HS256'])['jti']
+        blacklist_token(jti)  # Thêm token vào blacklist
 
 class LoginWindow(QWidget):
     auth_result_signal = pyqtSignal(str)
@@ -134,6 +148,6 @@ class LoginWindow(QWidget):
             QMessageBox.critical(self, 'Thất bại', response)
 
     def open_main_app(self):
-        self.main_app = MainApp()  # Thay thế bằng class MainApp của bạn
+        self.main_app = MainApp()  
         self.main_app.show()
         self.close()

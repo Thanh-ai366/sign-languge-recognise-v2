@@ -6,17 +6,16 @@ from flask import Flask, request, jsonify
 from werkzeug.utils import secure_filename
 from app.prediction import SignLanguagePredictor
 from auth.login import login, register_user, verify_token
+from auth.token import blacklist_token
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 
-# Cấu hình Sentry với Flask
 sentry_sdk.init(
     dsn="https://<Your-Sentry-DSN-Here>",
     integrations=[FlaskIntegration()],
     traces_sample_rate=1.0
 )
 
-# Cấu hình logging
 if not os.path.exists('logs'):
     os.makedirs('logs')
 
@@ -25,20 +24,16 @@ logging.basicConfig(filename='logs/api_requests.log', level=logging.INFO,
 
 app = Flask(__name__)
 
-# Đường dẫn lưu trữ hình ảnh tải lên
 UPLOAD_FOLDER = 'uploads/'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# Đường dẫn đến mô hình và từ điển nhãn
 model_path = "app/data/saved_models/cnn_model.h5"
 labels_dict = {i: str(i) for i in range(10)}
 labels_dict.update({10 + i: chr(97 + i) for i in range(26)})
 
-# Tạo thư mục lưu trữ nếu chưa tồn tại
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
-# API đăng ký người dùng
 @app.route('/register', methods=['POST'])
 def register_api():
     data = request.json
@@ -47,12 +42,10 @@ def register_api():
     email = data.get('email')
     result = register_user(username, password, email)
 
-    # Ghi log thông tin đăng ký
     logging.info(f"Đăng ký: {username}, Email: {email}")
 
     return jsonify({'message': result})
 
-# API đăng nhập người dùng
 @app.route('/login', methods=['POST'])
 def login_api():
     data = request.json
@@ -60,7 +53,6 @@ def login_api():
     password = data.get('password')
     result = login(username, password)
 
-    # Ghi log thông tin đăng nhập
     logging.info(f"Đăng nhập: {username}")
 
     if "Token:" in result:
@@ -68,7 +60,16 @@ def login_api():
     
     return jsonify({'message': result})
 
-# API dự đoán ký hiệu ngôn ngữ từ hình ảnh
+@app.route('/logout', methods=['POST'])
+def logout_api():
+    token = request.headers.get('Authorization')
+
+    if token:
+        blacklist_token(jwt.decode(token.split(" ")[1], options={"verify_signature": False})['jti'])
+        return jsonify({'message': 'Đăng xuất thành công'})
+    
+    return jsonify({'error': 'Token không được cung cấp'}), 403
+
 @app.route('/predict', methods=['POST'])
 def predict_api():
     token = request.headers.get('Authorization')
@@ -89,10 +90,8 @@ def predict_api():
     image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     image.save(image_path)
 
-    # Ghi thời gian bắt đầu dự đoán
     start_time = time.time()
     
-    # Khởi tạo predictor và dự đoán
     predictor = SignLanguagePredictor(model_path, labels_dict)
     try:
         predicted_sign = predictor.predict_with_cache(image_path)
@@ -100,14 +99,11 @@ def predict_api():
         sentry_sdk.capture_exception(e)
         return jsonify({'error': 'Đã xảy ra lỗi trong quá trình xử lý'}), 500
 
-    # Ghi thời gian kết thúc và tính thời gian phản hồi
     end_time = time.time()
     response_time = end_time - start_time
     
-    # Ghi log kết quả dự đoán và thời gian phản hồi
     logging.info(f"Ảnh: {filename}, Kết quả: {predicted_sign}, Thời gian phản hồi: {response_time:.2f}s")
 
-    # Xóa tệp hình ảnh sau khi dự đoán
     os.remove(image_path)
 
     return jsonify({'predicted_sign': predicted_sign})

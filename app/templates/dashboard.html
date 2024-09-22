@@ -5,16 +5,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Phân tích API</title>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #line-chart {
+            width: 100%;
+            height: 600px;
+        }
+    </style>
 </head>
 <body>
     <h1>Hiệu suất API theo thời gian</h1>
     <div id="line-chart"></div>
 
-    <!-- JavaScript truyền dữ liệu từ Flask vào biểu đồ Plotly -->
     <script>
         // Đảm bảo rằng dữ liệu được truyền đúng định dạng JSON từ Flask
         var graphs = JSON.parse('{{ graphJSON | tojson | safe }}');
         Plotly.newPlot('line-chart', graphs);
+
+        // Tự động cập nhật dữ liệu sau mỗi 10 giây
+        setInterval(function() {
+            fetch('/api/refresh_data')
+                .then(response => response.json())
+                .then(data => {
+                    var newGraphs = JSON.parse(data.graphJSON);
+                    Plotly.react('line-chart', newGraphs);
+                });
+        }, 10000);
     </script>
 </body>
 </html>

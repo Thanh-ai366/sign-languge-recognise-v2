@@ -11,7 +11,6 @@ python-dotenv>=0.15.0
 PyJWT>=2.1.0
 matplotlib>=3.3.4
 fpdf>=1.7.2
-unittest
 opencv-python-headless>=4.5.1.48
 csv
 pyaudio>=0.2.11
@@ -22,3 +21,4 @@ werkzeug==2.1.1
 sentry-sdk
 watchdog
 PyJWT
+SQLAlchemy>=1.4.0

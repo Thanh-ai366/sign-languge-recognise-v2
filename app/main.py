@@ -148,7 +148,8 @@ class RegisterWindow(QWidget):
         username = self.username_entry.text()
         password = self.password_entry.text()
         user_manager = Register()
-        response = user_manager.register(username, password)
+        email = "example@example.com"
+        response = user_manager.register(username, password, email)
         QMessageBox.information(self, 'Đăng ký', response)
         self.close()
 

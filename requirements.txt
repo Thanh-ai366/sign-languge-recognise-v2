@@ -12,7 +12,6 @@ PyJWT>=2.1.0
 matplotlib>=3.3.4
 fpdf>=1.7.2
 opencv-python-headless>=4.5.1.48
-csv
 pyaudio>=0.2.11
 Flask==2.1.1
 redis==4.0.2

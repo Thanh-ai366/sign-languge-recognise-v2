@@ -1,3 +1,4 @@
+# login.py
 import os
 import threading
 import jwt
@@ -10,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from argon2 import PasswordHasher, exceptions as argon2_exceptions
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, String, DateTime
-from .token import blacklist_token  # Import blacklist function
+from .token import blacklist_token  
 
 # Cấu hình SQLAlchemy
 Base = declarative_base()
@@ -61,25 +62,37 @@ class UserManager:
             return "Mật khẩu không đúng"
 
     def create_jwt(self, username):
+        secret_key = os.getenv("SECRET_KEY")
+        if secret_key is None:
+            return "SECRET_KEY chưa được thiết lập trong biến môi trường"
+        
         expiration_time = datetime.utcnow() + timedelta(hours=1)
         payload = {
             'username': username,
             'exp': expiration_time
         }
-        token = jwt.encode(payload, os.getenv("SECRET_KEY"), algorithm='HS256')
+        token = jwt.encode(payload, secret_key, algorithm='HS256')
         return token
 
     def create_refresh_token(self, username):
+        secret_key = os.getenv("SECRET_KEY")
+        if secret_key is None:
+            return "SECRET_KEY chưa được thiết lập trong biến môi trường"
+        
         expiration_time = datetime.utcnow() + timedelta(days=7)
         payload = {
             'username': username,
             'exp': expiration_time
         }
-        refresh_token = jwt.encode(payload, os.getenv("SECRET_KEY"), algorithm='HS256')
+        refresh_token = jwt.encode(payload, secret_key, algorithm='HS256')
         return refresh_token
 
     def logout(self, token):
-        jti = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=['HS256'])['jti']
+        secret_key = os.getenv("SECRET_KEY")
+        if secret_key is None:
+            raise ValueError("SECRET_KEY chưa được thiết lập trong biến môi trường")
+
+        jti = jwt.decode(token, secret_key, algorithms=['HS256'])['jti']
         blacklist_token(jti)  # Thêm token vào blacklist
 
 class LoginWindow(QWidget):
@@ -148,6 +161,8 @@ class LoginWindow(QWidget):
             QMessageBox.critical(self, 'Thất bại', response)
 
     def open_main_app(self):
+        # Chúng ta sẽ không nhập MainApp ở đây
+        from app.main import MainApp  # Import tại đây để tránh vòng lặp
         self.main_app = MainApp()  
         self.main_app.show()
         self.close()

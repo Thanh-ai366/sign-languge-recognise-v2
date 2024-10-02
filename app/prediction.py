@@ -2,10 +2,11 @@ import sys
 import cv2
 import numpy as np
 import pyttsx3
-from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QDialog, QLabel, QTimer
+from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QDialog, QLabel
+from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtCore import QTimer
 from models.model_loader import load_model
-from analytics.data_logger import DataLogger
+from analytics import DataLogger
 import threading
 import redis
 
@@ -27,7 +28,8 @@ class PredictionException(Exception):
 
 # Lớp SignLanguagePredictor chứa toàn bộ logic dự đoán
 class SignLanguagePredictor:
-    def __init__(self, model_path, labels_dict):
+    def __init__(self, model_path, labels_dict, parent_window):  # Thêm tham số parent_window
+        self.parent_window = parent_window  # Lưu trữ parent_window
         self.model_path = model_path
         self.labels_dict = labels_dict
         self.model = self.load_model()
@@ -38,8 +40,10 @@ class SignLanguagePredictor:
         self.bg = None
         self.a_weight = 0.5
         self.cam = cv2.VideoCapture(0)  # Sử dụng webcam mặc định
+
         if not self.cam.isOpened():
             raise WebcamOpenException("Không thể mở webcam. Vui lòng kiểm tra kết nối.")
+        
         self.running = True
 
         self.visual_dict = {0: '0', 1: '1', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 
@@ -51,7 +55,7 @@ class SignLanguagePredictor:
 
     def load_model(self):
         try:
-            model = load_model(self.model_path)  # Load model từ đường dẫn
+            model = load_model(self.model_path)  # Load model từ đường dẫn được truyền vào
             print(f"Mô hình đã được tải thành công từ {self.model_path}")
             return model
         except Exception as e:
@@ -71,7 +75,7 @@ class SignLanguagePredictor:
     def extract_hand(self, image, threshold=25):
         diff = cv2.absdiff(self.bg.astype("uint8"), image)
         thresh = cv2.threshold(diff, threshold, 255, cv2.THRESH_BINARY)[1]
-        (_, cnts, _) = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cnts, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         if len(cnts) == 0:
             return
@@ -111,11 +115,15 @@ class SignLanguagePredictor:
         count = 0
         result_list = []
         prev_sign = None
-    
+
         while self.cam.isOpened():
             frame = self.get_frame()
             if frame is None:
                 break
+
+            # Gọi hàm update_frame từ đối tượng PredictionWindow
+            # Thay thế dòng cv2.imshow("Video Feed", frame) bằng:
+            self.parent_window.update_frame(frame)
 
             roi = self.get_roi(frame)
             gray = self.preprocess_image(roi)
@@ -126,7 +134,6 @@ class SignLanguagePredictor:
                 self.process_hand(gray, roi, frame, count, result_list, prev_sign)
 
             count += 1
-            cv2.imshow("Video Feed", frame)
 
             if self.check_exit_key():
                 break
@@ -178,12 +185,16 @@ class SignLanguagePredictor:
         self.cam.release()
         cv2.destroyAllWindows()
 
-
 # Giao diện chính
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Ngôn ngữ ký hiệu - Prediction")
+        
+        # Khởi tạo bộ dự đoán với mô hình mới
+        self.predictor = SignLanguagePredictor("C:/Users/ASUS/Downloads/sign-languge-recognise-v2/app/data/saved_models/cnn_model_best.keras", 
+                                                labels_dict=self.get_labels_dict(), 
+                                                parent_window=self)  # Chuyển self vào
 
         # Nút để mở cửa sổ dự đoán
         self.start_prediction_button = QPushButton("Bắt đầu dự đoán")
@@ -198,65 +209,76 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(container)
 
     def open_prediction_window(self):
-        self.prediction_window = PredictionWindow()
+        self.prediction_window = PredictionWindow(self)  # Truyền self vào PredictionWindow
         self.prediction_window.show()
-
+    
+    def get_labels_dict(self):
+        return {
+            0: '0', 1: '1', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6',
+            7: '7', 8: '8', 9: '9', 10: 'a', 11: 'b', 12: 'c',
+            13: 'd', 14: 'e', 15: 'f', 16: 'g', 17: 'h', 18: 'i',
+            19: 'j', 20: 'k', 21: 'l', 22: 'm', 23: 'n', 24: 'o',
+            25: 'p', 26: 'q', 27: 'r', 28: 's', 29: 't', 30: 'u',
+            31: 'v', 32: 'w', 33: 'x', 34: 'y', 35: 'z'
+        }
 
 # Giao diện video từ camera và thực hiện dự đoán
 class PredictionWindow(QDialog):
-    def __init__(self):
+    def __init__(self, parent_window):  # Thêm tham số parent_window
         super().__init__()
+        self.parent_window = parent_window  # Lưu trữ parent_window
         self.setWindowTitle("Dự đoán ngôn ngữ ký hiệu")
 
-        # Khởi tạo bộ dự đoán
-        self.predictor = SignLanguagePredictor("model.h5", labels_dict=self.get_labels_dict())
+        # Khởi tạo bộ dự đoán với mô hình mới
+        self.predictor = SignLanguagePredictor("C:/Users/ASUS/Downloads/sign-languge-recognise-v2/app/data/saved_models/cnn_model_best.keras", 
+                                                labels_dict=self.get_labels_dict(), 
+                                                parent_window=self)  # Truyền self vào
 
-        # Khởi tạo nhãn để hiển thị dự đoán
+        # Nhãn để hiển thị dự đoán
         self.result_label = QLabel("Dự đoán: ")
         self.result_label.setStyleSheet("font-size: 20px; color: red;")
+
+        # Nhãn để hiển thị video
+        self.video_label = QLabel(self)
+        layout = QVBoxLayout()
+        layout.addWidget(self.video_label)
+        layout.addWidget(self.result_label)
 
         # Nút kết thúc dự đoán
         self.stop_button = QPushButton("Dừng dự đoán")
         self.stop_button.clicked.connect(self.stop_prediction)
-
-        layout = QVBoxLayout()
-        layout.addWidget(self.result_label)
         layout.addWidget(self.stop_button)
+
         self.setLayout(layout)
 
-        # Thiết lập bộ hẹn giờ để liên tục lấy khung hình từ webcam
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_frame)
-        self.timer.start(20)  # Cập nhật khung hình mỗi 20ms
+        # Khởi chạy dự đoán trong luồng riêng
+        self.prediction_thread = threading.Thread(target=self.predictor.start_prediction)
+        self.prediction_thread.start()
 
-        self.cap = cv2.VideoCapture(0)
-
-    def update_frame(self):
-        ret, frame = self.cap.read()
-        if ret:
-            roi = self.predictor.get_roi(frame)
-            gray = self.predictor.preprocess_image(roi)
-            prediction = self.predictor.predict(self.predictor.preprocess_frame(gray))
-
-            # Hiển thị dự đoán trên giao diện
-            self.result_label.setText(f"Dự đoán: {prediction}")
-
-            # Hiển thị khung hình từ webcam
-            cv2.imshow("Webcam", frame)
+    def update_frame(self, frame):
+        # Chuyển đổi khung hình sang QImage và hiển thị trên QLabel
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        h, w, ch = frame_rgb.shape
+        bytes_per_line = ch * w
+        q_img = QImage(frame_rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
+        self.video_label.setPixmap(QPixmap.fromImage(q_img))
 
     def stop_prediction(self):
-        self.timer.stop()
-        self.cap.release()
-        cv2.destroyAllWindows()
+        self.predictor.running = False
+        self.close()
 
     def get_labels_dict(self):
-        return {0: 'A', 1: 'B', 2: 'C', 3: 'D', 4: 'E', 5: 'F', 6: 'G', 7: 'H', 8: 'I',
-                9: 'J', 10: 'K', 11: 'L', 12: 'M', 13: 'N', 14: 'O', 15: 'P', 16: 'Q', 
-                17: 'R', 18: 'S', 19: 'T', 20: 'U', 21: 'V', 22: 'W', 23: 'X', 24: 'Y', 25: 'Z'}
-
+        return {
+            0: '0', 1: '1', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6',
+            7: '7', 8: '8', 9: '9', 10: 'a', 11: 'b', 12: 'c',
+            13: 'd', 14: 'e', 15: 'f', 16: 'g', 17: 'h', 18: 'i',
+            19: 'j', 20: 'k', 21: 'l', 22: 'm', 23: 'n', 24: 'o',
+            25: 'p', 26: 'q', 27: 'r', 28: 's', 29: 't', 30: 'u',
+            31: 'v', 32: 'w', 33: 'x', 34: 'y', 35: 'z'
+        }
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
+    main_window = MainWindow()
+    main_window.show()
     sys.exit(app.exec_())

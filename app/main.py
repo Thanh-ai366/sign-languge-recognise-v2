@@ -1,28 +1,23 @@
 import os
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QStackedWidget, QWidget, QLabel, QLineEdit, QFormLayout, QDialog, QMessageBox
+import threading
+
+os.environ['QT_QPA_PLATFORM_PLUGIN_PATH'] = r'E:\Anaconda\envs\sign1\Lib\site-packages\PyQt5\Qt5\plugins'
+
+from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QStackedWidget, QWidget, QLabel, QLineEdit, QMessageBox
+from PyQt5.QtGui import QPixmap, QPalette, QBrush, QFont
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 import cv2
 import numpy as np
 from dotenv import load_dotenv
-
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'models'))
-
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from auth.register import Register
+from auth.login import UserManager
 from models.model_loader import load_model
 from analytics import DataLogger
-
-sys.path.append(r'C:/Users/ASUS/Downloads/sign-languge-recognise v2/app/learning.py')
-
 from learning import Feedback, LessonManager, ProgressTracker
-
-sys.path.append(r'C:/Users/ASUS/Downloads/sign-languge-recognise v2/app/analytics.py')
-
 from analytics import SignAnalysis, ReportGenerator
-
-sys.path.append(r'C:/Users/ASUS/Downloads/sign-languge-recognise v2/app/prediction.py')
-
 from prediction import SignLanguagePredictor
-
 
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -35,9 +30,10 @@ class PredictionThread(QThread):
     def __init__(self, predictor, parent=None):
         super().__init__(parent)
         self.predictor = predictor  # Đối tượng SignLanguagePredictor để thực hiện dự đoán
-        self.running = True  # Cờ để kiểm soát quá trình chạy
+        self.running = False  # Cờ để kiểm soát quá trình chạy
 
     def run(self):
+        self.running = True
         count = 0
         result_list = []
         prev_sign = None
@@ -83,109 +79,121 @@ class PredictionThread(QThread):
         self.wait()
 
 
-# Lớp LoginWindow cho giao diện đăng nhập
-class LoginWindow(QDialog):
+class LoginWindow(QWidget):
+    auth_result_signal = pyqtSignal(str)
+
     def __init__(self):
         super().__init__()
+        self.initUI()
+        self.auth_result_signal.connect(self.handle_auth_result)
+
+    def initUI(self):
         self.setWindowTitle('Đăng nhập')
-        self.setGeometry(400, 150, 300, 150)
-
-        self.username_label = QLabel('Tên người dùng')
-        self.password_label = QLabel('Mật khẩu')
-
-        self.username_input = QLineEdit()
-        self.password_input = QLineEdit()
-        self.password_input.setEchoMode(QLineEdit.Password)
-
-        self.login_button = QPushButton('Đăng nhập')
-        self.register_button = QPushButton('Đăng ký')
-
-        form_layout = QFormLayout()
-        form_layout.addRow(self.username_label, self.username_input)
-        form_layout.addRow(self.password_label, self.password_input)
+        self.setGeometry(100, 100, 400, 300)
+        self.setAutoFillBackground(True)
+        
+        palette = self.palette()
+        background_image = QPixmap("path/to/login_background.jpg")
+        palette.setBrush(QPalette.Window, QBrush(background_image.scaled(self.size(),
+            Qt.IgnoreAspectRatio, Qt.SmoothTransformation)))
+        self.setPalette(palette)
 
         layout = QVBoxLayout()
-        layout.addLayout(form_layout)
+        title = QLabel('Đăng nhập vào hệ thống', self)
+        title.setFont(QFont('Arial', 24, QFont.Bold))
+        title.setStyleSheet("color: white;")
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+
+        self.username_entry = QLineEdit(self)
+        self.username_entry.setPlaceholderText("Tên người dùng")
+        layout.addWidget(self.username_entry)
+
+        self.password_entry = QLineEdit(self)
+        self.password_entry.setPlaceholderText("Mật khẩu")
+        self.password_entry.setEchoMode(QLineEdit.Password)
+        layout.addWidget(self.password_entry)
+
+        self.login_button = QPushButton('Đăng nhập', self)
+        self.login_button.clicked.connect(self.login)
         layout.addWidget(self.login_button)
-        layout.addWidget(self.register_button)
+
+        register_button = QPushButton('Đăng ký', self)
+        register_button.clicked.connect(self.open_register_window)
+        layout.addWidget(register_button)
 
         self.setLayout(layout)
 
-        # Sự kiện nhấn nút
-        self.login_button.clicked.connect(self.check_login)
-        self.register_button.clicked.connect(self.open_register)
+    def login(self):
+        username = self.username_entry.text()
+        password = self.password_entry.text()
+        user_manager = UserManager()
+        threading.Thread(target=self.authenticate, args=(user_manager, username, password)).start()
 
-    def check_login(self):
-        # Logic kiểm tra đăng nhập (giả lập)
-        username = self.username_input.text()
-        password = self.password_input.text()
+    def authenticate(self, user_manager, username, password):
+        response = user_manager.login(username, password)
+        self.auth_result_signal.emit(response)
 
-        if username == "user" and password == "password":
-            self.accept()
+    def handle_auth_result(self, response):
+        if "Token:" in response:
+            QMessageBox.information(self, 'Đăng nhập thành công', 'Đăng nhập thành công')
+            self.open_main_app()
         else:
-            QMessageBox.warning(self, 'Lỗi đăng nhập', 'Tên người dùng hoặc mật khẩu không đúng')
+            QMessageBox.critical(self, 'Đăng nhập thất bại', response)
 
-    def open_register(self):
-        register_window = RegisterWindow(self)
-        register_window.exec_()
+    def open_register_window(self):
+        self.register_window = RegisterWindow()
+        self.register_window.show()
 
-# Lớp RegisterWindow cho giao diện đăng ký
-class RegisterWindow(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
+    def open_main_app(self):
+        self.main_app = MainApp()
+        self.main_app.show()
+        self.close()
+
+
+class RegisterWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+
+    def initUI(self):
         self.setWindowTitle('Đăng ký')
-        self.setGeometry(400, 150, 300, 150)
-
-        self.username_label = QLabel('Tên người dùng')
-        self.password_label = QLabel('Mật khẩu')
-        self.confirm_password_label = QLabel('Xác nhận mật khẩu')
-
-        self.username_input = QLineEdit()
-        self.password_input = QLineEdit()
-        self.password_input.setEchoMode(QLineEdit.Password)
-        self.confirm_password_input = QLineEdit()
-        self.confirm_password_input.setEchoMode(QLineEdit.Password)
-
-        self.register_button = QPushButton('Đăng ký')
-
-        form_layout = QFormLayout()
-        form_layout.addRow(self.username_label, self.username_input)
-        form_layout.addRow(self.password_label, self.password_input)
-        form_layout.addRow(self.confirm_password_label, self.confirm_password_input)
+        self.setGeometry(150, 150, 300, 200)
 
         layout = QVBoxLayout()
-        layout.addLayout(form_layout)
-        layout.addWidget(self.register_button)
+        self.username_entry = QLineEdit(self)
+        self.username_entry.setPlaceholderText("Tên người dùng")
+        layout.addWidget(self.username_entry)
+
+        self.password_entry = QLineEdit(self)
+        self.password_entry.setPlaceholderText("Mật khẩu")
+        self.password_entry.setEchoMode(QLineEdit.Password)
+        layout.addWidget(self.password_entry)
+
+        register_button = QPushButton('Đăng ký', self)
+        register_button.clicked.connect(self.register)
+        layout.addWidget(register_button)
 
         self.setLayout(layout)
-
-        # Sự kiện nhấn nút
-        self.register_button.clicked.connect(self.register)
 
     def register(self):
-        # Lấy giá trị từ các trường nhập liệu
-        username = self.username_input.text()  # Sử dụng username
-        password = self.password_input.text()
-        confirm_password = self.confirm_password_input.text()
-
-        if password != confirm_password:
-            QMessageBox.warning(self, 'Lỗi đăng ký', 'Mật khẩu không trùng khớp')
-        else:
-            # Xử lý đăng ký với username (ví dụ: lưu vào cơ sở dữ liệu)
-            print(f"Đăng ký thành công cho tài khoản: {username}")  # Hiển thị thông báo với username
-            QMessageBox.information(self, 'Thành công', 'Đăng ký thành công!')
-            self.accept()
+        username = self.username_entry.text()
+        password = self.password_entry.text()
+        user_manager = Register()
+        email = "example@example.com"
+        response = user_manager.register(username, password, email)
+        QMessageBox.information(self, 'Đăng ký', response)
+        self.close()
 
 
-# Lớp PredictionScreen để dự đoán ký hiệu
 class PredictionScreen(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Dự đoán ngôn ngữ ký hiệu")
 
         # Tạo bộ dự đoán
-        self.predictor = SignLanguagePredictor("model.h5", labels_dict=self.get_labels_dict())
-
+        self.predictor = SignLanguagePredictor(r"C:\Users\ASUS\Downloads\sign-languge-recognise-v2\app\data\saved_models\cnn_model_best.keras", labels_dict=self.get_labels_dict())
+        
         # Tạo luồng dự đoán
         self.prediction_thread = PredictionThread(self.predictor)
 
@@ -226,117 +234,108 @@ class PredictionScreen(QWidget):
     def get_labels_dict(self):
         # Tạo từ điển nhãn cho dự đoán
         return {0: 'A', 1: 'B', 2: 'C', 3: 'D', 4: 'E', 5: 'F', 6: 'G', 7: 'H', 8: 'I',
-                9: 'J', 10: 'K', 11: 'L', 12: 'M', 13: 'N', 14: 'O', 15: 'P', 16: 'Q', 
-                17: 'R', 18: 'S', 19: 'T', 20: 'U', 21: 'V', 22: 'W', 23: 'X', 24: 'Y', 25: 'Z'}
+                9: 'J', 10: 'K', 11: 'L', 12: 'M', 13: 'N', 14: 'O', 15: 'P', 16: 'Q', 17: 'R', 18: 'S', 19: 'T', 20: 'U', 21: 'V', 
+                22: 'W', 23: 'X', 24: 'Y', 25: 'Z'}
 
-
-# Lớp LearningScreen để học ngôn ngữ ký hiệu
-class LearningScreen(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Học ngôn ngữ ký hiệu")
-
-        # Khởi tạo lớp học
-        self.feedback = Feedback("user123")
-        self.lesson_manager = LessonManager()
-
-        # Hiển thị các bài học
-        self.lesson_label = QLabel("Chọn bài học để bắt đầu")
-        self.lesson_label.setAlignment(Qt.AlignCenter)
-
-        self.start_button = QPushButton("Bắt đầu học")
-        self.progress_button = QPushButton("Xem tiến độ")
-
-        layout = QVBoxLayout()
-        layout.addWidget(self.lesson_label)
-        layout.addWidget(self.start_button)
-        layout.addWidget(self.progress_button)
-
-        self.setLayout(layout)
-
-        # Sự kiện nhấn nút
-        self.start_button.clicked.connect(self.start_lesson)
-        self.progress_button.clicked.connect(self.view_progress)
-
-    def start_lesson(self):
-        lessons = self.lesson_manager.get_lessons()
-        if lessons:
-            selected_lesson = lessons[0]  # Giả sử chọn bài học đầu tiên
-            self.lesson_label.setText(f"Bắt đầu học ký hiệu: {selected_lesson.get_sign()}")
-
-    def view_progress(self):
-        progress_tracker = ProgressTracker("user123")
-        progress_report = progress_tracker.get_progress_report()
-        QMessageBox.information(self, "Tiến độ học tập", "\n".join(progress_report))
-
-
-# Lớp AnalyticsScreen để phân tích dữ liệu
-class AnalyticsScreen(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Phân tích dữ liệu")
-
-        # Khởi tạo lớp phân tích
-        self.analysis = SignAnalysis("data/logs/sign_usage.csv")
-        self.report_generator = ReportGenerator("Báo cáo phân tích")
-
-        self.analysis_label = QLabel("Phân tích dữ liệu và tạo báo cáo")
-        self.analysis_label.setAlignment(Qt.AlignCenter)
-
-        self.generate_report_button = QPushButton("Tạo báo cáo")
-        self.view_analysis_button = QPushButton("Xem phân tích")
-
-        layout = QVBoxLayout()
-        layout.addWidget(self.analysis_label)
-        layout.addWidget(self.generate_report_button)
-        layout.addWidget(self.view_analysis_button)
-
-        self.setLayout(layout)
-
-        # Sự kiện nhấn nút
-        self.generate_report_button.clicked.connect(self.generate_report)
-        self.view_analysis_button.clicked.connect(self.view_analysis)
-
-    def generate_report(self):
-        self.analysis.generate_report()
-        QMessageBox.information(self, "Báo cáo", "Báo cáo đã được tạo thành công!")
-
-    def view_analysis(self):
-        self.analysis.plot_accuracy()
-
-
-# Lớp MainApp để quản lý toàn bộ giao diện chính
 class MainApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Ứng dụng Ngôn ngữ Ký hiệu")
+        self.setGeometry(100, 100, 600, 400)
 
-        self.stacked_widget = QStackedWidget()
+        # Tạo các nút chức năng
+        self.prediction_button = QPushButton("Dự đoán")
+        self.learning_button = QPushButton("Học")
+        self.analytics_button = QPushButton("Phân tích")
 
-        # Tạo các màn hình khác nhau
-        self.login_screen = LoginWindow()
+        # Kết nối các nút với các hàm tương ứng
+        self.prediction_button.clicked.connect(self.open_prediction_screen)
+        self.learning_button.clicked.connect(self.open_learning_screen)
+        self.analytics_button.clicked.connect(self.open_analytics_screen)
+
+        # Tạo layout cho màn hình chính
+        layout = QVBoxLayout()
+        layout.addWidget(self.prediction_button)
+        layout.addWidget(self.learning_button)
+        layout.addWidget(self.analytics_button)
+
+        # Tạo một widget chứa layout
+        widget = QWidget()
+        widget.setLayout(layout)
+
+        self.setCentralWidget(widget)
+
+    def open_prediction_screen(self):
         self.prediction_screen = PredictionScreen()
+        self.prediction_screen.show()
+
+    def open_learning_screen(self):
         self.learning_screen = LearningScreen()
+        self.learning_screen.show()
+
+    def open_analytics_screen(self):
         self.analytics_screen = AnalyticsScreen()
-
-        # Thêm vào stacked widget
-        self.stacked_widget.addWidget(self.login_screen)
-        self.stacked_widget.addWidget(self.prediction_screen)
-        self.stacked_widget.addWidget(self.learning_screen)
-        self.stacked_widget.addWidget(self.analytics_screen)
-
-        self.setCentralWidget(self.stacked_widget)
-
-        # Khi đăng nhập thành công, chuyển sang giao diện chính
-        self.login_screen.login_button.clicked.connect(self.show_main_menu)
-
-    def show_main_menu(self):
-        self.stacked_widget.setCurrentWidget(self.prediction_screen)
+        self.analytics_screen.show()
 
 
-# Chạy chương trình
-if __name__ == "__main__":
+class LearningScreen(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Học Ngôn ngữ Ký hiệu")
+        layout = QVBoxLayout()
+
+        # Các thành phần cho chức năng học
+        self.lesson_button = QPushButton("Xem Bài học")
+        self.feedback_button = QPushButton("Gửi Phản hồi")
+        
+        layout.addWidget(self.lesson_button)
+        layout.addWidget(self.feedback_button)
+
+        self.setLayout(layout)
+
+        # Kết nối các nút với các hàm tương ứng
+        self.lesson_button.clicked.connect(self.view_lessons)
+        self.feedback_button.clicked.connect(self.give_feedback)
+
+    def view_lessons(self):
+        # Thêm mã để hiển thị bài học ở đây
+        QMessageBox.information(self, "Bài học", "Hiển thị các bài học tại đây.")
+
+    def give_feedback(self):
+        # Thêm mã để gửi phản hồi ở đây
+        QMessageBox.information(self, "Phản hồi", "Gửi phản hồi tại đây.")
+
+
+class AnalyticsScreen(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Phân tích Ký hiệu")
+        layout = QVBoxLayout()
+
+        # Các thành phần cho chức năng phân tích
+        self.report_button = QPushButton("Tạo Báo cáo")
+        self.analysis_button = QPushButton("Phân tích Ký hiệu")
+
+        layout.addWidget(self.report_button)
+        layout.addWidget(self.analysis_button)
+
+        self.setLayout(layout)
+
+        # Kết nối các nút với các hàm tương ứng
+        self.report_button.clicked.connect(self.generate_report)
+        self.analysis_button.clicked.connect(self.analyze_signs)
+
+    def generate_report(self):
+        # Thêm mã để tạo báo cáo ở đây
+        QMessageBox.information(self, "Báo cáo", "Tạo báo cáo tại đây.")
+
+    def analyze_signs(self):
+        # Thêm mã để phân tích ký hiệu ở đây
+        QMessageBox.information(self, "Phân tích", "Phân tích ký hiệu tại đây.")
+
+if __name__ == '__main__':
     app = QApplication(sys.argv)
-    window = MainApp()
-    window.show()
+    login_window = LoginWindow()
+    login_window.show()
     sys.exit(app.exec_())
+

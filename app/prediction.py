@@ -8,10 +8,6 @@ from PyQt5.QtCore import QTimer,Qt
 from models.model_loader import load_model
 from analytics import DataLogger
 import threading
-import redis
-
-# Kết nối với Redis
-cache = redis.Redis(host='localhost', port=6379, db=0)
 
 # Định nghĩa các lớp ngoại lệ tùy chỉnh
 class WebcamOpenException(Exception):

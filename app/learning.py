@@ -193,7 +193,7 @@ class ProgressTracker:
 # Khai báo lớp ImageAnalyzer
 class ImageAnalyzer:
     def __init__(self, model_path):  # Thêm mô hình CNN vào đây
-        # Tải mô hình CNN từ tệp
+        model_path = "C:/Users/ASUS/Downloads/sign-languge-recognise-v2/app/data/saved_models/cnn_model_best.keras"
         self.model = tf.keras.models.load_model(model_path)
         self.label_map = {0: "A", 1: "B", 2: "C", 3: "D", 4: "E"}  # Bản đồ nhãn mẫu (cập nhật theo nhãn của bạn)
 
@@ -297,6 +297,7 @@ def start_learning(username):
         feedback.give_feedback(selected_lesson.get_sign(), predicted_label)
 
         print(f"Độ chính xác: {accuracy}")
+
 
 if __name__ == "__main__":
     start_learning("user123")  # Thay "user123" bằng tên người dùng thực tế

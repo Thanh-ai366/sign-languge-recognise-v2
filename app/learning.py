@@ -303,7 +303,7 @@ class ProgressTracker:
 class ImageAnalyzer:
     def __init__(self, model_path):  
         # Tải mô hình CNN từ tệp
-        self.model_path = r"C:\Users\ASUS\Downloads\sign-languge-recognise\app\data\saved_models\cnn_model_best.keras"
+        self.model_path = r"C:\Users\ASUS\Downloads\sign-languge-recognise-v2\app\data\saved_models\cnn_model_best.keras"
         self.model = tf.keras.models.load_model(self.model_path)
         self.label_map = {0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9", 
                           10: "A", 11: "B", 12: "C", 13: "D", 14: "E", 15: "F", 16: "G", 17: "H", 

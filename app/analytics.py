@@ -60,10 +60,13 @@ class SignAnalysis:
         return data
 
     def generate_report(self):
+        report_data = []
         for sign, entries in self.data.items():
             avg_accuracy = np.mean([acc for acc, _ in entries])
             avg_time = np.mean([time for _, time in entries])
+            report_data.append((sign, avg_accuracy, avg_time))
             print(f"Ký hiệu: {sign} - Độ chính xác trung bình: {avg_accuracy:.2f} - Thời gian trung bình: {avg_time:.2f} giây")
+        return report_data
 
     def plot_accuracy(self):
         signs = []
@@ -78,6 +81,21 @@ class SignAnalysis:
         plt.xlabel('Ký hiệu')
         plt.ylabel('Độ chính xác trung bình')
         plt.title('Độ chính xác trung bình của các ký hiệu')
+        plt.show()
+
+    def plot_time(self):
+        signs = []
+        times = []
+        for sign, entries in self.data.items():
+            avg_time = np.mean([time for _, time in entries])
+            signs.append(sign)
+            times.append(avg_time)
+
+        plt.figure(figsize=(10, 5))
+        plt.bar(signs, times, color='green')
+        plt.xlabel('Ký hiệu')
+        plt.ylabel('Thời gian trung bình (giây)')
+        plt.title('Thời gian trung bình cho các ký hiệu')
         plt.show()
 
 class ReportGenerator:
@@ -98,6 +116,12 @@ class ReportGenerator:
     def save_report(self, file_path):
         self.pdf.output(file_path)
 
+    def generate_report(self, report_data):
+        for sign, avg_accuracy, avg_time in report_data:
+            self.add_section(f"Ký hiệu: {sign}", 
+                             f"Độ chính xác trung bình: {avg_accuracy:.2f}\nThời gian trung bình: {avg_time:.2f} giây")
+        self.save_report(f"data/reports/{datetime.now().strftime('%Y-%m-%d')}_sign_language_report.pdf")
+
 class RealTimeAnalyzer:
     def __init__(self, logger):
         self.logger = logger
@@ -107,6 +131,7 @@ class RealTimeAnalyzer:
         self.analysis.data = self.analysis.load_data()  # Tải lại dữ liệu mới
         self.analysis.generate_report()
         self.analysis.plot_accuracy()
+        self.analysis.plot_time()
 
 class LogDataWindow(QDialog):
     def __init__(self):
@@ -163,13 +188,23 @@ class AnalysisWindow(QDialog):
         self.report_button = QPushButton("Hiển thị báo cáo")
         self.report_button.clicked.connect(self.show_report)
 
-        # Nút vẽ biểu đồ
-        self.plot_button = QPushButton("Vẽ biểu đồ")
-        self.plot_button.clicked.connect(self.plot_accuracy)
+        # Nút vẽ biểu đồ độ chính xác
+        self.plot_accuracy_button = QPushButton("Vẽ biểu đồ độ chính xác")
+        self.plot_accuracy_button.clicked.connect(self.plot_accuracy)
+
+        # Nút vẽ biểu đồ thời gian
+        self.plot_time_button = QPushButton("Vẽ biểu đồ thời gian")
+        self.plot_time_button.clicked.connect(self.plot_time)
+
+        # Nút tạo báo cáo PDF
+        self.report_pdf_button = QPushButton("Tạo báo cáo PDF")
+        self.report_pdf_button.clicked.connect(self.generate_pdf_report)
 
         layout = QVBoxLayout()
         layout.addWidget(self.report_button)
-        layout.addWidget(self.plot_button)
+        layout.addWidget(self.plot_accuracy_button)
+        layout.addWidget(self.plot_time_button)
+        layout.addWidget(self.report_pdf_button)
 
         self.setLayout(layout)
 
@@ -178,6 +213,14 @@ class AnalysisWindow(QDialog):
 
     def plot_accuracy(self):
         self.analysis.plot_accuracy()
+
+    def plot_time(self):
+        self.analysis.plot_time()
+
+    def generate_pdf_report(self):
+        report_data = self.analysis.generate_report()
+        report_generator = ReportGenerator("Báo cáo Ngôn ngữ Ký hiệu")
+        report_generator.generate_report(report_data)
 
 class MainWindow(QMainWindow):
     def __init__(self):

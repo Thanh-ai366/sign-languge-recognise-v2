@@ -2,11 +2,12 @@ import sys
 import cv2
 import numpy as np
 import pyttsx3
+import time  # Import thêm để tính thời gian dự đoán
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QDialog, QLabel
 from PyQt5.QtGui import QImage, QPixmap
-from PyQt5.QtCore import QTimer,Qt
+from PyQt5.QtCore import QTimer, Qt
 from models.model_loader import load_model
-from analytics import DataLogger
+from analytics import DataLogger  # Import lớp DataLogger để ghi dữ liệu tự động
 import threading
 
 # Định nghĩa các lớp ngoại lệ tùy chỉnh
@@ -31,8 +32,8 @@ class SignLanguagePredictor:
         self.model = self.load_model()
         self.engine = pyttsx3.init()
         self.engine.setProperty('rate', 150)
-        self.logger = DataLogger("data/logs/sign_usage.csv")
-        
+        self.logger = DataLogger("data/logs/sign_usage.csv")  # Tạo logger để ghi dữ liệu
+
         self.bg = None
         self.a_weight = 0.5
         self.cam = cv2.VideoCapture(0)
@@ -42,9 +43,11 @@ class SignLanguagePredictor:
 
         self.running = True
 
+        # Dictionary chứa các ký hiệu ngôn ngữ (chữ cái và số)
         self.visual_dict = {i: chr(97 + i) for i in range(26)}
         self.visual_dict.update({i + 26: str(i) for i in range(10)})
 
+        # Bộ đếm thời gian cho khung hình
         self.frame_timer = QTimer()
         self.frame_timer.timeout.connect(self.process_next_frame)
         self.frame_timer.start(30)
@@ -118,7 +121,16 @@ class SignLanguagePredictor:
                 res = cv2.cvtColor(res, cv2.COLOR_BGR2GRAY)
 
                 final_res = self.preprocess_frame(res)
-                predicted_sign = self.predict(final_res)
+
+                start_time = time.time()  # Bắt đầu đếm thời gian dự đoán
+                predicted_sign = self.predict(final_res)  # Dự đoán ký hiệu
+                end_time = time.time()  # Kết thúc đếm thời gian
+
+                prediction_time = end_time - start_time  # Tính toán thời gian dự đoán
+
+                # Ghi dữ liệu dự đoán (ký hiệu, độ chính xác giả định là 1.0, thời gian dự đoán)
+                # Nếu bạn có thông tin về độ chính xác thật, có thể thay thế giá trị 1.0 bằng giá trị chính xác.
+                self.logger.log(predicted_sign, 1.0, prediction_time)
 
                 cv2.putText(frame, f'Sign: {predicted_sign}', (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 

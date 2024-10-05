@@ -1,22 +1,39 @@
-# login.py
 import os
 import threading
 import jwt
+import json
 import datetime
 from datetime import datetime, timedelta
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QApplication
+)
 from PyQt5.QtCore import pyqtSignal
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, Column, String, DateTime
 from sqlalchemy.orm import sessionmaker
-from argon2 import PasswordHasher, exceptions as argon2_exceptions
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, String, DateTime
-from .token import blacklist_token  
+from argon2 import PasswordHasher, exceptions as argon2_exceptions
+import redis
+
+
+# Khởi tạo Redis để lưu trữ token blacklist
+r = redis.Redis(host='localhost', port=6379, db=0)
+
+
+# Thêm token vào blacklist
+def blacklist_token(jti):
+    r.set(jti, 'blacklisted', ex=timedelta(hours=1))
+
+
+# Kiểm tra xem token có trong blacklist không
+def is_token_blacklisted(jti):
+    return r.get(jti) is not None
+
 
 # Cấu hình SQLAlchemy
 Base = declarative_base()
 engine = create_engine('sqlite:///data/users.db')
 Session = sessionmaker(bind=engine)
+
 
 class User(Base):
     __tablename__ = 'users'
@@ -25,11 +42,14 @@ class User(Base):
     email = Column(String)
     created_at = Column(DateTime)
 
+
 # Khởi tạo bảng trong database nếu chưa tồn tại
 Base.metadata.create_all(engine)
 
+
 # Mã hóa mật khẩu
 ph = PasswordHasher()
+
 
 class UserManager:
     def __init__(self):
@@ -41,7 +61,7 @@ class UserManager:
 
         hashed_password = ph.hash(password)
         new_user = User(username=username, hashed_password=hashed_password, email=email, created_at=datetime.utcnow())
-        
+
         try:
             self.session.add(new_user)
             self.session.commit()
@@ -65,7 +85,7 @@ class UserManager:
         secret_key = os.getenv("SECRET_KEY")
         if secret_key is None:
             return "SECRET_KEY chưa được thiết lập trong biến môi trường"
-        
+
         expiration_time = datetime.utcnow() + timedelta(hours=1)
         payload = {
             'username': username,
@@ -78,7 +98,7 @@ class UserManager:
         secret_key = os.getenv("SECRET_KEY")
         if secret_key is None:
             return "SECRET_KEY chưa được thiết lập trong biến môi trường"
-        
+
         expiration_time = datetime.utcnow() + timedelta(days=7)
         payload = {
             'username': username,
@@ -95,6 +115,82 @@ class UserManager:
         jti = jwt.decode(token, secret_key, algorithms=['HS256'])['jti']
         blacklist_token(jti)  # Thêm token vào blacklist
 
+
+# Lớp UserData để quản lý dữ liệu người dùng
+class UserData:
+    def __init__(self, username, data_file="auth/user_data.json"):
+        self.username = username
+        self.data_file = data_file
+        self.data = self.load_user_data()
+
+    def load_user_data(self):
+        try:
+            if os.path.exists(self.data_file):
+                with open(self.data_file, 'r') as f:
+                    all_data = json.load(f)
+                    return all_data.get(self.username, {})
+            else:
+                return {}
+        except Exception as e:
+            print(f"Lỗi khi tải dữ liệu người dùng: {e}")
+            return {}
+
+    def save_user_data(self):
+        try:
+            if os.path.exists(self.data_file):
+                with open(self.data_file, 'r') as f:
+                    all_data = json.load(f)
+            else:
+                all_data = {}
+
+            all_data[self.username] = self.data
+
+            with open(self.data_file, 'w') as f:
+                json.dump(all_data, f)
+            print("Dữ liệu người dùng đã được lưu.")
+        except Exception as e:
+            print(f"Lỗi khi lưu dữ liệu người dùng: {e}")
+
+    def update_data(self, key, value):
+        self.data[key] = value
+        self.save_user_data()
+
+
+# Lớp Register để kiểm tra và đăng ký người dùng
+class Register:
+    def __init__(self):
+        self.session = Session()
+
+    def register(self, username, password, email):
+        if self.session.query(User).filter_by(username=username).first():
+            return "Tên người dùng đã tồn tại"
+
+        hashed_password = ph.hash(password)
+        new_user = User(username=username, hashed_password=hashed_password, email=email)
+        self.session.add(new_user)
+        self.session.commit()
+        return "Đăng ký thành công"
+
+    def is_password_valid(self, password):
+        if len(password) < 8:
+            return False
+        if not any(char.isdigit() for char in password):
+            return False
+        if not any(char.isalpha() for char in password):
+            return False
+        if not any(char in "!@#$%^&*()-_+=" for char in password):
+            return False
+        return True
+
+    def is_username_valid(self, username):
+        if len(username) < 3:
+            return False
+        if not username.isalnum():
+            return False
+        return True
+
+
+# Lớp LoginWindow để tạo giao diện đăng nhập
 class LoginWindow(QWidget):
     auth_result_signal = pyqtSignal(str)
 
@@ -163,6 +259,13 @@ class LoginWindow(QWidget):
     def open_main_app(self):
         # Chúng ta sẽ không nhập MainApp ở đây
         from app.main import MainApp  # Import tại đây để tránh vòng lặp
-        self.main_app = MainApp()  
+        self.main_app = MainApp()
         self.main_app.show()
         self.close()
+
+
+if __name__ == "__main__":
+    app = QApplication([])
+    window = LoginWindow()
+    window.show()
+    app.exec_()

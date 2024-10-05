@@ -65,8 +65,14 @@ def logout_api():
     token = request.headers.get('Authorization')
 
     if token:
-        blacklist_token(jwt.decode(token.split(" ")[1], options={"verify_signature": False})['jti'])
-        return jsonify({'message': 'Đăng xuất thành công'})
+        try:
+            decoded_token = jwt.decode(token.split(" ")[1], app.config['SECRET_KEY'], algorithms=["HS256"])
+            blacklist_token(decoded_token['jti'])
+            return jsonify({'message': 'Đăng xuất thành công'})
+        except jwt.ExpiredSignatureError:
+            return jsonify({'error': 'Token đã hết hạn'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'error': 'Token không hợp lệ'}), 401
     
     return jsonify({'error': 'Token không được cung cấp'}), 403
 

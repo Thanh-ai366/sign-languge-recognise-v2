@@ -12,6 +12,7 @@ spec:
       labels:
         app: sign-language-api
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: sign-language-api
         image: sign-language-api:latest  # Sử dụng image đã tạo với Docker

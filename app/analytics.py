@@ -1,5 +1,6 @@
 # analytics.py
 import csv
+import cv2
 import os
 from collections import defaultdict
 from datetime import datetime
@@ -12,34 +13,50 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 class DataLogger:
     def __init__(self, file_path):
         self.file_path = file_path
-        self.headers = ["Timestamp", "Sign", "Accuracy", "Time Taken"]
-
-        directory = os.path.dirname(self.file_path)
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-
-        # Tạo tệp và ghi header nếu tệp chưa tồn tại
+        self.headers = ["Timestamp", "Sign", "Accuracy", "Time Taken", "Image Path"]
+        if not os.path.exists(os.path.dirname(self.file_path)):
+            os.makedirs(os.path.dirname(self.file_path))
         if not self._file_exists():
             with open(self.file_path, mode='w', newline='') as file:
                 writer = csv.writer(file)
                 writer.writerow(self.headers)
 
-    def _file_exists(self):
-        return os.path.exists(self.file_path)
 
-    def log(self, sign, accuracy, time_taken):
+    def log(self, sign, accuracy, time_taken, image_path):
         try:
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             with open(self.file_path, mode='a', newline='') as file:
                 writer = csv.writer(file)
-                writer.writerow([timestamp, sign, accuracy, time_taken])
+                writer.writerow([timestamp, sign, accuracy, time_taken, image_path])
         except Exception as e:
             print(f"Lỗi khi ghi dữ liệu: {e}")
 
+    def _file_exists(self):
+        return os.path.exists(self.file_path)
+
+    def log(self, sign, accuracy, time_taken, image_path):
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        with open(self.file_path, mode='a', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow([timestamp, sign, accuracy, time_taken, image_path])
+
 class SignAnalysis:
+    IMAGE_SIZE = (64, 64)
+    
     def __init__(self, file_path):
         self.file_path = file_path
         self.data = self.load_data()
+
+    def plot_similarity(self):
+        signs, similarities = self.compute_similarity()
+        
+        # Vẽ biểu đồ SSIM
+        plt.figure(figsize=(10, 5))
+        plt.bar(signs, similarities, color='purple')
+        plt.xlabel('Ký hiệu')
+        plt.ylabel('Độ giống nhau SSIM')
+        plt.title('Độ giống nhau SSIM của các ký hiệu')
+        plt.show()
 
     def load_data(self):
         data = defaultdict(list)
@@ -51,7 +68,8 @@ class SignAnalysis:
                         sign = int(row["Sign"])
                         accuracy = float(row["Accuracy"])
                         time_taken = float(row["Time Taken"])
-                        data[sign].append((accuracy, time_taken))
+                        image_path = row["Image Path"]  # Sửa tên trường CSV cho đúng
+                        data[sign].append((accuracy, time_taken, image_path))
                     except ValueError as e:
                         print(f"Lỗi trong dữ liệu: {e}")
                         continue
@@ -59,22 +77,59 @@ class SignAnalysis:
             print(f"Tệp {self.file_path} không tồn tại!")
         return data
 
+    def compare_images(self, img_path1, img_path2):
+        if not os.path.exists(img_path1) or not os.path.exists(img_path2):
+            print(f"Không tìm thấy một trong hai ảnh: {img_path1}, {img_path2}")
+            return 0.0
+
+        img1 = cv2.imread(img_path1, cv2.IMREAD_GRAYSCALE)
+        img2 = cv2.imread(img_path2, cv2.IMREAD_GRAYSCALE)
+
+        if img1 is None or img2 is None:
+            print(f"Lỗi khi đọc ảnh: {img_path1}, {img_path2}")
+            return 0.0
+
+        img1 = cv2.resize(img1, self.IMAGE_SIZE)
+        img2 = cv2.resize(img2, self.IMAGE_SIZE)
+
+        from skimage.metrics import structural_similarity as ssim
+        similarity_index, _ = ssim(img1, img2, full=True)
+
+        return similarity_index
+
     def generate_report(self):
         report_data = []
         for sign, entries in self.data.items():
-            avg_accuracy = np.mean([acc for acc, _ in entries])
-            avg_time = np.mean([time for _, time in entries])
-            report_data.append((sign, avg_accuracy, avg_time))
-            print(f"Ký hiệu: {sign} - Độ chính xác trung bình: {avg_accuracy:.2f} - Thời gian trung bình: {avg_time:.2f} giây")
+            avg_accuracy = np.mean([acc for acc, _, _ in entries])
+            avg_time = np.mean([time for _, time, _ in entries])
+            sample_image = f"sample_images/{sign}.jpg"
+
+            # So sánh các ảnh đã lưu với ảnh mẫu
+            similarities = []
+            for _, _, img_path in entries:
+                similarity = self.compare_images(img_path, sample_image)
+                similarities.append(similarity)
+
+            avg_similarity = np.mean(similarities)  # Độ giống nhau trung bình với ảnh mẫu
+
+            report_data.append((sign, avg_accuracy, avg_time, avg_similarity))
+            print(f"Ký hiệu: {sign} - Độ chính xác: {avg_accuracy:.2f} - Thời gian: {avg_time:.2f}s - SSIM: {avg_similarity:.2f}")
+
         return report_data
 
-    def plot_accuracy(self):
+    def compute_similarity(self):
         signs = []
-        accuracies = []
+        similarities = []
         for sign, entries in self.data.items():
-            avg_accuracy = np.mean([acc for acc, _ in entries])
+            sample_image = f"sample_images/{sign}.jpg"
+            similarity_list = [self.compare_images(img_path, sample_image) for _, _, img_path in entries]
+            avg_similarity = np.mean(similarity_list)
             signs.append(sign)
-            accuracies.append(avg_accuracy)
+            similarities.append(avg_similarity)
+        return signs, similarities
+
+    def plot_accuracy(self):
+        signs, accuracies = self.compute_accuracy()
 
         plt.figure(figsize=(10, 5))
         plt.bar(signs, accuracies, color='blue')
@@ -83,13 +138,17 @@ class SignAnalysis:
         plt.title('Độ chính xác trung bình của các ký hiệu')
         plt.show()
 
-    def plot_time(self):
+    def compute_accuracy(self):
         signs = []
-        times = []
+        accuracies = []
         for sign, entries in self.data.items():
-            avg_time = np.mean([time for _, time in entries])
+            avg_accuracy = np.mean([acc for acc, _ in entries])
             signs.append(sign)
-            times.append(avg_time)
+            accuracies.append(avg_accuracy)
+        return signs, accuracies
+
+    def plot_time(self):
+        signs, times = self.compute_time()
 
         plt.figure(figsize=(10, 5))
         plt.bar(signs, times, color='green')
@@ -97,6 +156,15 @@ class SignAnalysis:
         plt.ylabel('Thời gian trung bình (giây)')
         plt.title('Thời gian trung bình cho các ký hiệu')
         plt.show()
+
+    def compute_time(self):
+        signs = []
+        times = []
+        for sign, entries in self.data.items():
+            avg_time = np.mean([time for _, time in entries])
+            signs.append(sign)
+            times.append(avg_time)
+        return signs, times
 
 class ReportGenerator:
     def __init__(self, report_title):
@@ -117,9 +185,11 @@ class ReportGenerator:
         self.pdf.output(file_path)
 
     def generate_report(self, report_data):
-        for sign, avg_accuracy, avg_time in report_data:
+        for sign, avg_accuracy, avg_time, avg_similarity in report_data:
             self.add_section(f"Ký hiệu: {sign}", 
-                             f"Độ chính xác trung bình: {avg_accuracy:.2f}\nThời gian trung bình: {avg_time:.2f} giây")
+                             f"Độ chính xác trung bình: {avg_accuracy:.2f}\n"
+                             f"Thời gian trung bình: {avg_time:.2f} giây\n"
+                             f"Độ giống nhau SSIM: {avg_similarity:.2f}")
         self.save_report(f"data/reports/{datetime.now().strftime('%Y-%m-%d')}_sign_language_report.pdf")
 
 class RealTimeAnalyzer:
@@ -132,49 +202,6 @@ class RealTimeAnalyzer:
         self.analysis.generate_report()
         self.analysis.plot_accuracy()
         self.analysis.plot_time()
-
-class LogDataWindow(QDialog):
-    def __init__(self):
-        super().__init__()
-
-        self.setWindowTitle("Log Data")
-
-        self.logger = DataLogger("data/logs/sign_usage.csv")
-
-        # Nhập ký hiệu
-        self.sign_input = QLineEdit(self)
-        self.sign_input.setPlaceholderText("Nhập ký hiệu")
-
-        # Nhập độ chính xác
-        self.accuracy_input = QLineEdit(self)
-        self.accuracy_input.setPlaceholderText("Nhập độ chính xác (0-1)")
-
-        # Nhập thời gian
-        self.time_input = QLineEdit(self)
-        self.time_input.setPlaceholderText("Nhập thời gian (giây)")
-
-        # Nút Log
-        self.log_button = QPushButton("Log")
-        self.log_button.clicked.connect(self.log_data)
-
-        layout = QVBoxLayout()
-        layout.addWidget(QLabel("Ký hiệu"))
-        layout.addWidget(self.sign_input)
-        layout.addWidget(QLabel("Độ chính xác"))
-        layout.addWidget(self.accuracy_input)
-        layout.addWidget(QLabel("Thời gian"))
-        layout.addWidget(self.time_input)
-        layout.addWidget(self.log_button)
-
-        self.setLayout(layout)
-
-    def log_data(self):
-        sign = self.sign_input.text()
-        accuracy = float(self.accuracy_input.text())
-        time_taken = float(self.time_input.text())
-
-        self.logger.log(sign, accuracy, time_taken)
-        self.accept()
 
 class AnalysisWindow(QDialog):
     def __init__(self):
@@ -200,13 +227,21 @@ class AnalysisWindow(QDialog):
         self.report_pdf_button = QPushButton("Tạo báo cáo PDF")
         self.report_pdf_button.clicked.connect(self.generate_pdf_report)
 
+        # Nút vẽ biểu đồ độ giống nhau SSIM
+        self.plot_similarity_button = QPushButton("Vẽ biểu đồ SSIM")
+        self.plot_similarity_button.clicked.connect(self.plot_similarity)
+
         layout = QVBoxLayout()
         layout.addWidget(self.report_button)
         layout.addWidget(self.plot_accuracy_button)
         layout.addWidget(self.plot_time_button)
         layout.addWidget(self.report_pdf_button)
+        layout.addWidget(self.plot_similarity_button)  # Thêm nút vào layout
 
         self.setLayout(layout)
+
+    def plot_similarity(self):
+        self.analysis.plot_similarity() 
 
     def show_report(self):
         self.analysis.generate_report()
@@ -228,26 +263,17 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("Ngôn ngữ Ký hiệu - Phân tích")
 
-        # Nút mở cửa sổ Log Data
-        self.log_data_button = QPushButton("Log Data")
-        self.log_data_button.clicked.connect(self.open_log_data_window)
-
         # Nút mở cửa sổ phân tích
         self.analysis_button = QPushButton("Xem phân tích")
         self.analysis_button.clicked.connect(self.open_analysis_window)
 
         # Tạo layout
         layout = QVBoxLayout()
-        layout.addWidget(self.log_data_button)
         layout.addWidget(self.analysis_button)
 
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
-
-    def open_log_data_window(self):
-        self.log_data_window = LogDataWindow()
-        self.log_data_window.show()
 
     def open_analysis_window(self):
         self.analysis_window = AnalysisWindow()

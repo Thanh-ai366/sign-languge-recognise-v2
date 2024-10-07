@@ -1,16 +1,16 @@
-import sys
 import cv2
+import os
+import sys 
 import numpy as np
 import pyttsx3
-import time  # Import thêm để tính thời gian dự đoán
+import time  
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QDialog, QLabel
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtCore import QTimer, Qt
 from models.model_loader import load_model
-from analytics import DataLogger  # Import lớp DataLogger để ghi dữ liệu tự động
+from analytics import DataLogger  
 import threading
 
-# Định nghĩa các lớp ngoại lệ tùy chỉnh
 class WebcamOpenException(Exception):
     pass
 
@@ -23,7 +23,6 @@ class ModelNotLoadedException(Exception):
 class PredictionException(Exception):
     pass
 
-# Lớp SignLanguagePredictor chứa toàn bộ logic dự đoán
 class SignLanguagePredictor:
     def __init__(self, model_path, labels_dict, parent_window):
         self.parent_window = parent_window
@@ -32,7 +31,14 @@ class SignLanguagePredictor:
         self.model = self.load_model()
         self.engine = pyttsx3.init()
         self.engine.setProperty('rate', 150)
-        self.logger = DataLogger("data/logs/sign_usage.csv")  # Tạo logger để ghi dữ liệu
+
+        self.parent_window = parent_window
+        self.bg = None
+        self.a_weight = 0.5
+        self.logger = DataLogger()  # Giả sử bạn đã có lớp Logger để ghi log
+        # Tạo thư mục lưu ảnh nếu chưa tồn tại
+        if not os.path.exists("images_captured"):
+            os.makedirs("images_captured")
 
         self.bg = None
         self.a_weight = 0.5
@@ -128,12 +134,30 @@ class SignLanguagePredictor:
 
                 prediction_time = end_time - start_time  # Tính toán thời gian dự đoán
 
-                # Ghi dữ liệu dự đoán (ký hiệu, độ chính xác giả định là 1.0, thời gian dự đoán)
-                # Nếu bạn có thông tin về độ chính xác thật, có thể thay thế giá trị 1.0 bằng giá trị chính xác.
-                self.logger.log(predicted_sign, 1.0, prediction_time)
+                # Tạo tên tệp ảnh duy nhất dựa trên thời gian
+                image_filename = f"images_captured/hand_{time.strftime('%Y%m%d_%H%M%S')}.jpg"
 
+                # Lưu ảnh tay đã xử lý vào thư mục images_captured/
+                cv2.imwrite(image_filename, res)
+
+                # Ghi dữ liệu dự đoán (ký hiệu, độ chính xác, thời gian dự đoán, đường dẫn ảnh)
+                self.logger.log(predicted_sign, 1.0, prediction_time, image_filename)
+
+                # Hiển thị ký hiệu dự đoán lên giao diện
                 cv2.putText(frame, f'Sign: {predicted_sign}', (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
+                # Cập nhật thông báo UI: Ký hiệu dự đoán và thời gian dự đoán
+                self.parent_window.instruction_label.setText(
+                    f"Dự đoán: {predicted_sign}. Thời gian: {prediction_time:.2f}s. Chuẩn bị ký hiệu tiếp theo sau 3 giây..."
+                )
+                self.parent_window.update_frame(frame)
+
+                # Thời gian chờ 3 giây để người dùng chuẩn bị ký hiệu mới
+                time.sleep(3)
+
+                # Tiếp tục dự đoán ký hiệu mới
+                self.parent_window.instruction_label.setText("Đang chờ ký hiệu tiếp theo...")
+        
         self.parent_window.update_frame(frame)
 
     def get_frame(self):
@@ -145,7 +169,7 @@ class SignLanguagePredictor:
     def get_roi(self, frame):
         return frame[100:350, 325:575]
 
-    def preprocess_image(self, roi):
+    def preprocess_frame(self, roi):
         gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
         return cv2.GaussianBlur(gray, (7, 7), 0)
 

@@ -1,3 +1,4 @@
+#backup&restore.sh
 #!/bin/bash
 
 # Thư mục lưu backup

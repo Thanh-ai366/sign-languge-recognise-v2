@@ -70,12 +70,15 @@ class LearningApp(QWidget):
         pixmap = QPixmap(lesson.get_image_path())
         self.image_label.setPixmap(pixmap.scaled(300, 300, Qt.KeepAspectRatio))
         self.instruction_label.setText(lesson.get_instruction())
-
     def capture_image_and_predict(self):
         """Chụp ảnh từ camera và dự đoán ký hiệu"""
         img = self.image_analyzer.capture_image()
         if img is not None:
             predicted_label = self.image_analyzer.predict(img)
+            if predicted_label is None:
+                QMessageBox.warning(self, "Lỗi", "Không thể thực hiện dự đoán!")
+                return
+
             actual_label = self.lesson_list.currentItem().text().split(" - ")[0]
             accuracy = self.image_analyzer.evaluate_prediction(actual_label, predicted_label)
 
@@ -89,7 +92,7 @@ class LearningApp(QWidget):
                                     f"Ký hiệu dự đoán: {predicted_label}\n"
                                     f"Độ chính xác: {'Đúng' if accuracy else 'Sai'}")
         else:
-            QMessageBox.warning(self, "Lỗi", "Không thể chụp ảnh từ camera!")
+            QMessageBox.warning(self, "Lỗi", "Không thể khởi động camera hoặc chụp ảnh từ camera!")
 
     def display_progress(self):
         """Hiển thị tiến trình học tập"""
@@ -121,14 +124,13 @@ class Feedback:
         except Exception as e:
             print(f"Lỗi khi tải phản hồi người dùng: {e}")
             return {}
-
     def save_feedback_data(self):
         """Lưu phản hồi người dùng vào file JSON"""
         try:
             with open(self.feedback_file, 'r') as file:
                 all_feedback = json.load(file)
         except FileNotFoundError:
-            all_feedback = {}
+            all_feedback = {}  # Nếu file không tồn tại, tạo dict trống
         except Exception as e:
             print(f"Lỗi khi tải phản hồi người dùng: {e}")
             all_feedback = {}
@@ -141,6 +143,7 @@ class Feedback:
             print("Phản hồi của người dùng đã được lưu.")
         except Exception as e:
             print(f"Lỗi khi lưu phản hồi: {e}")
+
 
     def give_feedback(self, actual_label, predicted_label):
         """Ghi nhận phản hồi dựa trên kết quả dự đoán"""
@@ -318,6 +321,25 @@ class ImageAnalyzer:
             print(f"Mô hình không tồn tại tại {model_path}")
             return None
 
+    def predict(self, img):
+        """Dự đoán ký hiệu từ hình ảnh"""
+        if self.model is None:
+            print("Mô hình chưa được tải. Không thể dự đoán.")
+            return None
+
+        processed_img = self.preprocess_image(img)
+        prediction = self.model.predict(processed_img)
+        predicted_label_index = np.argmax(prediction)
+
+        try:
+            label_map = {0: 'A', 1: 'B', 2: 'C'}  # Cập nhật cho phù hợp với mô hình của bạn
+            predicted_label = label_map[predicted_label_index]
+            return predicted_label
+        except KeyError:
+            print(f"Chỉ số nhãn {predicted_label_index} không hợp lệ!")
+            return None
+
+
     def capture_image(self):
         """Chụp ảnh từ camera"""
         camera = cv2.VideoCapture(0)
@@ -338,20 +360,6 @@ class ImageAnalyzer:
         img_resized = cv2.resize(img, (64, 64))
         img_array = img_resized.astype("float32") / 255.0
         return np.expand_dims(img_array, axis=0)
-
-    def predict(self, img):
-        """Dự đoán ký hiệu từ hình ảnh"""
-        processed_img = self.preprocess_image(img)
-        prediction = self.model.predict(processed_img)
-        predicted_label_index = np.argmax(prediction)
-
-        try:
-            label_map = {0: 'A', 1: 'B', 2: 'C'}  # Cập nhật cho phù hợp với mô hình của bạn
-            predicted_label = label_map[predicted_label_index]
-            return predicted_label
-        except KeyError:
-            print(f"Chỉ số nhãn {predicted_label_index} không hợp lệ!")
-            return None
 
     def evaluate_prediction(self, actual_label, predicted_label):
         """Đánh giá độ chính xác của dự đoán"""

@@ -2,6 +2,7 @@
 import os
 import threading
 import jwt
+import secrets
 import datetime
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (
@@ -13,9 +14,19 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from argon2 import PasswordHasher, exceptions as argon2_exceptions
 import redis
+import uuid
 
-# Khởi tạo Redis để lưu trữ token blacklist
-r = redis.Redis(host='localhost', port=6379, db=0)
+if "SECRET_KEY" not in os.environ:
+    os.environ["SECRET_KEY"] = secrets.token_hex(32)  # Tạo một secret key ngẫu nhiên
+    print("Đã tạo secret key:", os.environ["SECRET_KEY"])
+else:
+    print("Secret key đã được thiết lập.")
+try:
+    r = redis.Redis(host='localhost', port=6379, db=0)
+    r.ping()
+    print("Kết nối Redis thành công")
+except redis.ConnectionError as e:
+    print(f"Lỗi kết nối Redis: {e}")
 
 # Thêm token vào blacklist
 def blacklist_token(jti):
@@ -59,70 +70,6 @@ Base.metadata.create_all(engine)
 # Mã hóa mật khẩu
 ph = PasswordHasher()
 
-class UserManager:
-    def __init__(self):
-        self.session = Session()
-
-    def register(self, username, password, email):
-        if self.session.query(User).filter_by(username=username).first() is not None:
-            return "Tên đăng nhập đã tồn tại"
-
-        hashed_password = ph.hash(password)
-        new_user = User(username=username, hashed_password=hashed_password, email=email, created_at=datetime.utcnow())
-
-        try:
-            self.session.add(new_user)
-            self.session.commit()
-            return "Đăng ký thành công"
-        except Exception as e:
-            self.session.rollback()
-            return f"Đã xảy ra lỗi: {str(e)}"
-
-    def login(self, username, password):
-        user = self.session.query(User).filter_by(username=username).first()
-        if user is None:
-            return "Tên đăng nhập không tồn tại"
-
-        try:
-            ph.verify(user.hashed_password, password)
-            return f"Token: {self.create_jwt(username)}, Refresh Token: {self.create_refresh_token(username)}"
-        except argon2_exceptions.VerifyMismatchError:
-            return "Mật khẩu không đúng"
-
-    def create_jwt(self, username):
-        secret_key = os.getenv("SECRET_KEY")
-        if secret_key is None:
-            return "SECRET_KEY chưa được thiết lập trong biến môi trường"
-
-        expiration_time = datetime.utcnow() + timedelta(hours=1)
-        payload = {
-            'username': username,
-            'exp': expiration_time
-        }
-        token = jwt.encode(payload, secret_key, algorithm='HS256')
-        return token
-
-    def create_refresh_token(self, username):
-        secret_key = os.getenv("SECRET_KEY")
-        if secret_key is None:
-            return "SECRET_KEY chưa được thiết lập trong biến môi trường"
-
-        expiration_time = datetime.utcnow() + timedelta(days=7)
-        payload = {
-            'username': username,
-            'exp': expiration_time
-        }
-        refresh_token = jwt.encode(payload, secret_key, algorithm='HS256')
-        return refresh_token
-
-    def logout(self, token):
-        secret_key = os.getenv("SECRET_KEY")
-        if secret_key is None:
-            raise ValueError("SECRET_KEY chưa được thiết lập trong biến môi trường")
-
-        jti = jwt.decode(token, secret_key, algorithms=['HS256'])['jti']
-        blacklist_token(jti)  # Thêm token vào blacklist
-
 # Lớp UserData để quản lý dữ liệu người dùng
 class UserManager:
     def __init__(self):
@@ -155,21 +102,31 @@ class UserManager:
             return "Mật khẩu không đúng"
 
     def create_jwt(self, username):
+        secret_key = os.getenv("SECRET_KEY")
+        if not secret_key:
+            return "Lỗi: SECRET_KEY chưa được thiết lập trong biến môi trường"
+
         expiration_time = datetime.utcnow() + timedelta(hours=1)
+        jti = str(uuid.uuid4())  # Tạo JTI (JWT ID) duy nhất
         payload = {
             'username': username,
-            'exp': expiration_time
+            'exp': expiration_time,
+            'jti': jti
         }
-        token = jwt.encode(payload, os.getenv("SECRET_KEY"), algorithm='HS256')
+        token = jwt.encode(payload, secret_key, algorithm='HS256')
         return token
 
     def create_refresh_token(self, username):
+        secret_key = os.getenv("SECRET_KEY")
+        if not secret_key:
+            return "Lỗi: SECRET_KEY chưa được thiết lập trong biến môi trường"
+
         expiration_time = datetime.utcnow() + timedelta(days=7)
         payload = {
             'username': username,
             'exp': expiration_time
         }
-        refresh_token = jwt.encode(payload, os.getenv("SECRET_KEY"), algorithm='HS256')
+        refresh_token = jwt.encode(payload, secret_key, algorithm='HS256')
         return refresh_token
 
     def logout(self, token):
@@ -239,39 +196,6 @@ class LoginWindow(QWidget):
     def open_register_window(self):
         self.register_window = RegisterWindow()
         self.register_window.show()
-
-# Lớp Register để kiểm tra và đăng ký người dùng
-class Register:
-    def __init__(self):
-        self.session = Session()
-
-    def register(self, username, password, email):
-        if self.session.query(User).filter_by(username=username).first():
-            return "Tên người dùng đã tồn tại"
-
-        hashed_password = ph.hash(password)
-        new_user = User(username=username, hashed_password=hashed_password, email=email)
-        self.session.add(new_user)
-        self.session.commit()
-        return "Đăng ký thành công"
-
-    def is_password_valid(self, password):
-        if len(password) < 8:
-            return False
-        if not any(char.isdigit() for char in password):
-            return False
-        if not any(char.isalpha() for char in password):
-            return False
-        if not any(char in "!@#$%^&*()-_+=" for char in password):
-            return False
-        return True
-
-    def is_username_valid(self, username):
-        if len(username) < 3:
-            return False
-        if not username.isalnum():
-            return False
-        return True
 
 class RegisterWindow(QWidget):
     def __init__(self):

@@ -11,6 +11,10 @@ from models.model_loader import load_model
 from analytics import DataLogger  
 import threading
 
+
+class PyQtThreadException(Exception):
+    """Lỗi xảy ra khi PyQt xử lý không đúng trong thread khác."""
+    pass
 class WebcamOpenException(Exception):
     pass
 
@@ -66,12 +70,6 @@ class SignLanguagePredictor:
         except Exception as e:
             raise ModelLoadException(f"Lỗi khi tải mô hình: {e}")
 
-    def preprocess_frame(self, frame):
-        resized_frame = cv2.resize(frame, (64, 64))
-        normalized_frame = resized_frame / 255.0
-        flattened_frame = normalized_frame.flatten()
-        return np.expand_dims(flattened_frame, axis=0)
-
     def run_avg(self, image, aweight):
         if self.bg is None:
             self.bg = image.copy().astype("float")
@@ -94,18 +92,15 @@ class SignLanguagePredictor:
         self.engine.runAndWait()
 
     def predict(self, image):
-        image = image.reshape((1, 64, 64, 1))
+        image = image.reshape((1, 64, 64, 1))  # Đảm bảo đúng định dạng đầu vào
         try:
             prediction = self.model.predict(image)
         except Exception as e:
-            raise PredictionException(f"Lỗi khi thực hiện dự đoán: {e}")
-
+            raise PredictionException(f"Lỗi khi thực hiện dự đoán: {e}")  # Lỗi được bắt
+        
         predicted_label = np.argmax(prediction)
-        label = self.labels_dict[predicted_label]
-
+        label = self.labels_dict.get(predicted_label, "Unknown")  # Tránh lỗi nếu nhãn không tồn tại
         threading.Thread(target=self.say_sign, args=(label,)).start()
-
-        return label
 
     def process_next_frame(self):
         frame = self.get_frame()
@@ -153,7 +148,7 @@ class SignLanguagePredictor:
                 self.parent_window.update_frame(frame)
 
                 # Thời gian chờ 3 giây để người dùng chuẩn bị ký hiệu mới
-                time.sleep(3)
+                QTimer.singleShot(3000, lambda: self.parent_window.instruction_label.setText("Đang chờ ký hiệu tiếp theo..."))
 
                 # Tiếp tục dự đoán ký hiệu mới
                 self.parent_window.instruction_label.setText("Đang chờ ký hiệu tiếp theo...")
@@ -161,9 +156,14 @@ class SignLanguagePredictor:
         self.parent_window.update_frame(frame)
 
     def get_frame(self):
+        if not self.cam.isOpened():
+            raise WebcamOpenException("Không thể mở webcam.")
+        
         ret, frame = self.cam.read()
+        
         if not ret:
             raise WebcamOpenException("Không thể lấy khung hình từ webcam.")
+        
         return frame
 
     def get_roi(self, frame):
@@ -181,8 +181,12 @@ class SignLanguagePredictor:
         self.cleanup()
 
     def cleanup(self):
-        self.cam.release()
-        cv2.destroyAllWindows()
+        """Giải phóng camera và đóng tất cả cửa sổ."""
+        try:
+            if self.cam.isOpened():
+                self.cam.release()
+        finally:
+            cv2.destroyAllWindows()
 
 # Giao diện chính
 class MainWindow(QMainWindow):
@@ -213,7 +217,6 @@ class MainWindow(QMainWindow):
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
-
 
     def update_frame(self, frame):
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -268,8 +271,9 @@ class PredictionWindow(QDialog):
         self.setLayout(layout)
 
         # Chạy dự đoán trong luồng riêng
-        self.prediction_thread = threading.Thread(target=self.predictor.start_prediction)
-        self.prediction_thread.start()
+        self.prediction_timer = QTimer(self)
+        self.prediction_timer.timeout.connect(self.predictor.start_prediction)
+        self.prediction_timer.start(30)
 
 
     def update_frame(self, frame):

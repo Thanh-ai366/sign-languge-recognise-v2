@@ -36,40 +36,9 @@ class DataLogger:
 
 class SignAnalysis:
     IMAGE_SIZE = (64, 64)
-    
     def __init__(self, file_path):
         self.file_path = file_path
         self.data = self.load_data()
-
-    def plot_similarity(self):
-        signs, similarities = self.compute_similarity()
-        
-        # Vẽ biểu đồ SSIM
-        plt.figure(figsize=(10, 5))
-        plt.bar(signs, similarities, color='purple')
-        plt.xlabel('Ký hiệu')
-        plt.ylabel('Độ giống nhau SSIM')
-        plt.title('Độ giống nhau SSIM của các ký hiệu')
-        plt.show()
-
-    def load_data(self):
-        data = defaultdict(list)
-        try:
-            with open(self.file_path, mode='r') as file:
-                reader = csv.DictReader(file)
-                for row in reader:
-                    try:
-                        sign = int(row["Sign"])
-                        accuracy = float(row["Accuracy"])
-                        time_taken = float(row["Time Taken"])
-                        image_path = row["Image Path"]  # Sửa tên trường CSV cho đúng
-                        data[sign].append((accuracy, time_taken, image_path))
-                    except ValueError as e:
-                        print(f"Lỗi trong dữ liệu: {e}")
-                        continue
-        except FileNotFoundError:
-            print(f"Tệp {self.file_path} không tồn tại!")
-        return data
 
     def compare_images(self, img_path1, img_path2):
         if not os.path.exists(img_path1) or not os.path.exists(img_path2):
@@ -90,6 +59,54 @@ class SignAnalysis:
         similarity_index, _ = ssim(img1, img2, full=True)
 
         return similarity_index
+
+    def plot_similarity(self):
+        signs, similarities = self.compute_similarity()
+
+        if not signs:
+            print("Không có dữ liệu để vẽ biểu đồ SSIM.")
+            return
+
+        plt.figure(figsize=(10, 5))
+        plt.bar(signs, similarities, color='purple')
+        plt.xlabel('Ký hiệu')
+        plt.ylabel('Độ giống nhau SSIM')
+        plt.title('Độ giống nhau SSIM của các ký hiệu')
+        plt.show()
+
+    def plot_accuracy(self):
+        signs, accuracies = self.compute_accuracy()
+
+        if not signs:
+            print("Không có dữ liệu để vẽ biểu đồ độ chính xác.")
+            return
+
+        plt.figure(figsize=(10, 5))
+        plt.bar(signs, accuracies, color='blue')
+        plt.xlabel('Ký hiệu')
+        plt.ylabel('Độ chính xác trung bình')
+        plt.title('Độ chính xác trung bình của các ký hiệu')
+        plt.show()
+
+
+    def load_data(self):
+        data = defaultdict(list)
+        try:
+            with open(self.file_path, mode='r') as file:
+                reader = csv.DictReader(file)
+                for row in reader:
+                    try:
+                        sign = int(row["Sign"])
+                        accuracy = float(row["Accuracy"])
+                        time_taken = float(row["Time Taken"])
+                        image_path = row["Image Path"]  # Sửa tên trường CSV cho đúng
+                        data[sign].append((accuracy, time_taken, image_path))
+                    except ValueError as e:
+                        print(f"Lỗi trong dữ liệu: {e}")
+                        continue
+        except FileNotFoundError:
+            print(f"Tệp {self.file_path} không tồn tại!")
+        return data
 
     def generate_report(self):
         report_data = []
@@ -131,15 +148,6 @@ class SignAnalysis:
         plt.ylabel('Độ chính xác trung bình')
         plt.title('Độ chính xác trung bình của các ký hiệu')
         plt.show()
-
-    def compute_accuracy(self):
-        signs = []
-        accuracies = []
-        for sign, entries in self.data.items():
-            avg_accuracy = np.mean([acc for acc, _ in entries])
-            signs.append(sign)
-            accuracies.append(avg_accuracy)
-        return signs, accuracies
 
     def plot_time(self):
         signs, times = self.compute_time()

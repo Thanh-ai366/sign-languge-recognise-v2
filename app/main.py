@@ -68,7 +68,8 @@ class MainUI(QMainWindow):
         self.dashboard_window.setGeometry(100, 100, 1200, 800)
 
         web_view = QWebEngineView()
-        web_view.setUrl("http://127.0.0.1:5000/dashboard")  # Đường dẫn đến dashboard Flask
+        web_view.setUrl(QUrl("http://127.0.0.1:5000/dashboard")) 
+        Flask
         self.dashboard_window.setCentralWidget(web_view)
         self.dashboard_window.show()
 

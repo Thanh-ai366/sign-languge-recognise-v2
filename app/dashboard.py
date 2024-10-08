@@ -3,6 +3,7 @@ import plotly.graph_objs as go
 from plotly.utils import PlotlyJSONEncoder
 import json
 from datetime import datetime
+import os
 
 app = Flask(__name__)
 
@@ -13,7 +14,13 @@ def dashboard():
     response_times = []
     timestamps = []
     
-    with open('logs/api_requests.log', 'r') as log_file:
+    log_file_path = 'logs/api_requests.log'
+    
+    # Kiểm tra xem tệp log có tồn tại không
+    if not os.path.exists(log_file_path):
+        return "Log file not found.", 404
+
+    with open(log_file_path, 'r') as log_file:
         for line in log_file:
             if 'Thời gian phản hồi' in line:
                 parts = line.split(' - ')
@@ -31,4 +38,4 @@ def dashboard():
     return render_template('dashboard.html', graphJSON=graphJSON)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, use_reloader=False)

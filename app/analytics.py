@@ -7,8 +7,9 @@ from datetime import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 from fpdf import FPDF
-from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QDialog, QLineEdit, QLabel, QVBoxLayout
+from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QDialog
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from skimage.metrics import structural_similarity as ssim
 
 class DataLogger:
     def __init__(self, file_path):
@@ -21,7 +22,6 @@ class DataLogger:
                 writer = csv.writer(file)
                 writer.writerow(self.headers)
 
-
     def log(self, sign, accuracy, time_taken, image_path):
         try:
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -33,12 +33,6 @@ class DataLogger:
 
     def _file_exists(self):
         return os.path.exists(self.file_path)
-
-    def log(self, sign, accuracy, time_taken, image_path):
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        with open(self.file_path, mode='a', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow([timestamp, sign, accuracy, time_taken, image_path])
 
 class SignAnalysis:
     IMAGE_SIZE = (64, 64)
@@ -182,6 +176,9 @@ class ReportGenerator:
         self.pdf.multi_cell(0, 10, txt=content)
 
     def save_report(self, file_path):
+        dir_path = os.path.dirname(file_path)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
         self.pdf.output(file_path)
 
     def generate_report(self, report_data):

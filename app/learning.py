@@ -1,4 +1,5 @@
 import json
+import os
 import numpy as np
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QListWidget, QMessageBox
@@ -114,6 +115,9 @@ class Feedback:
         except FileNotFoundError:
             print(f"File {self.feedback_file} không tồn tại. Tạo file mới.")
             return {}
+        except json.JSONDecodeError:
+            print(f"File JSON bị hỏng: {self.feedback_file}")
+            return {}
         except Exception as e:
             print(f"Lỗi khi tải phản hồi người dùng: {e}")
             return {}
@@ -165,7 +169,6 @@ class Feedback:
         ]
         return history
 
-
 # ----------------------------------------------------
 # Lớp Lesson và LessonManager
 class Lesson:
@@ -200,13 +203,17 @@ class LessonManager:
         try:
             with open(self.lessons_file, 'r') as file:
                 lessons_data = json.load(file)
-                return [Lesson(sign, instruction, level) for level, signs in lessons_data.items() for sign, instruction in signs.items()]
+                return [Lesson(**lesson) for lesson in lessons_data]
         except FileNotFoundError:
-            print(f"File {self.lessons_file} không tồn tại. Tạo file mới.")
+            print(f"File {self.lessons_file} không tồn tại.")
+            return []
+        except json.JSONDecodeError:
+            print(f"File JSON bị hỏng: {self.lessons_file}")
             return []
         except Exception as e:
-            print(f"Lỗi khi tải dữ liệu bài học: {e}")
+            print(f"Lỗi khi tải bài học: {e}")
             return []
+
 
     def save_lessons(self):
         """Lưu dữ liệu bài học vào file JSON"""
@@ -239,13 +246,13 @@ class LessonManager:
 # ----------------------------------------------------
 # Lớp ProgressTracker
 class ProgressTracker:
-    def __init__(self, username, progress_file="learning/progress_data.json"):
+    def __init__(self, username, progress_file="learning/user_progress.json"):
         self.username = username
         self.progress_file = progress_file
         self.progress_data = self.load_progress_data()
 
     def load_progress_data(self):
-        """Tải dữ liệu tiến độ học tập"""
+        """Tải dữ liệu tiến trình học tập từ file JSON"""
         try:
             with open(self.progress_file, 'r') as file:
                 all_progress = json.load(file)
@@ -253,19 +260,22 @@ class ProgressTracker:
         except FileNotFoundError:
             print(f"File {self.progress_file} không tồn tại. Tạo file mới.")
             return {}
+        except json.JSONDecodeError:
+            print(f"File JSON bị hỏng: {self.progress_file}")
+            return {}
         except Exception as e:
-            print(f"Lỗi khi tải dữ liệu tiến độ: {e}")
+            print(f"Lỗi khi tải dữ liệu tiến trình: {e}")
             return {}
 
     def save_progress_data(self):
-        """Lưu dữ liệu tiến độ học tập"""
+        """Lưu dữ liệu tiến trình học tập vào file JSON"""
         try:
             with open(self.progress_file, 'r') as file:
                 all_progress = json.load(file)
         except FileNotFoundError:
             all_progress = {}
         except Exception as e:
-            print(f"Lỗi khi tải dữ liệu tiến độ: {e}")
+            print(f"Lỗi khi tải dữ liệu tiến trình: {e}")
             all_progress = {}
 
         all_progress[self.username] = self.progress_data
@@ -273,72 +283,78 @@ class ProgressTracker:
         try:
             with open(self.progress_file, 'w') as file:
                 json.dump(all_progress, file, indent=4)
-            print("Dữ liệu tiến độ đã được lưu.")
+            print("Dữ liệu tiến trình đã được lưu.")
         except Exception as e:
-            print(f"Lỗi khi lưu dữ liệu tiến độ: {e}")
+            print(f"Lỗi khi lưu dữ liệu tiến trình: {e}")
 
-    def update_progress(self, lesson, accuracy):
-        """Cập nhật tiến độ học tập"""
+    def update_progress(self, actual_label, accuracy):
+        """Cập nhật dữ liệu tiến trình học tập"""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        progress_entry = {
-            'lesson': lesson,
+        self.progress_data[timestamp] = {
+            'actual_label': actual_label,
             'accuracy': accuracy,
-            'timestamp': timestamp
         }
-
-        self.progress_data[timestamp] = progress_entry
         self.save_progress_data()
 
     def get_progress_report(self):
-        """Lấy báo cáo tiến độ học tập"""
-        report = [
-            f"Buổi học: {entry['lesson']}, Độ chính xác: {entry['accuracy']}, Thời gian: {entry['timestamp']}"
-            for entry in self.progress_data.values()
-        ]
+        """Tạo báo cáo tiến trình học tập"""
+        report = [f"Thời gian: {time}, Ký hiệu thực tế: {data['actual_label']}, Độ chính xác: {data['accuracy']}"
+                  for time, data in self.progress_data.items()]
         return report
-
 
 # ----------------------------------------------------
 # Lớp ImageAnalyzer (phân tích hình ảnh)
 class ImageAnalyzer:
-    def __init__(self, model_path):  
-        # Tải mô hình CNN từ tệp
-        self.model_path = r"C:\Users\ASUS\Downloads\sign-languge-recognise-v2\app\data\saved_models\cnn_model_best.keras"
-        self.model = tf.keras.models.load_model(self.model_path)
-        self.label_map = {0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9", 
-                          10: "A", 11: "B", 12: "C", 13: "D", 14: "E", 15: "F", 16: "G", 17: "H", 
-                          18: "I", 19: "J", 20: "K", 21: "L", 22: "M", 23: "N", 24: "O", 25: "P", 
-                          26: "Q", 27: "R", 28: "S", 29: "T", 30: "U", 31: "V", 32: "W", 33: "X", 
-                          34: "Y", 35: "Z"}  # Bản đồ nhãn số và chữ cái
+    def __init__(self, model_path):
+        self.model = self.load_model(model_path)
+
+    def load_model(self, model_path):
+        """Tải mô hình học máy từ tệp"""
+        if os.path.exists(model_path):
+            model = tf.keras.models.load_model(model_path)
+            print("Mô hình đã được tải thành công.")
+            return model
+        else:
+            print(f"Mô hình không tồn tại tại {model_path}")
+            return None
 
     def capture_image(self):
-        """Chụp ảnh từ camera."""
-        cap = cv2.VideoCapture(0)
-        ret, frame = cap.read()
-        cap.release()
+        """Chụp ảnh từ camera"""
+        camera = cv2.VideoCapture(0)
+        if not camera.isOpened():
+            print("Không thể khởi động camera!")
+            return None
+
+        ret, frame = camera.read()
+        camera.release()
         if ret:
             return frame
         else:
-            print("Không thể chụp ảnh.")
+            print("Không thể chụp ảnh!")
             return None
 
-    def preprocess_image(self, image):
-        """Tiền xử lý hình ảnh trước khi phân tích."""
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        resized = cv2.resize(gray, (64, 64))  # Thay đổi kích thước theo mô hình
-        normalized = resized / 255.0  # Chuẩn hóa giá trị pixel
-        return normalized.reshape(1, 64, 64, 1)
+    def preprocess_image(self, img):
+        """Tiền xử lý hình ảnh trước khi dự đoán"""
+        img_resized = cv2.resize(img, (64, 64))
+        img_array = img_resized.astype("float32") / 255.0
+        return np.expand_dims(img_array, axis=0)
 
-    def predict(self, image):
-        """Dự đoán nhãn ký hiệu từ hình ảnh."""
-        processed_image = self.preprocess_image(image)
-        prediction = self.model.predict(processed_image)
+    def predict(self, img):
+        """Dự đoán ký hiệu từ hình ảnh"""
+        processed_img = self.preprocess_image(img)
+        prediction = self.model.predict(processed_img)
         predicted_label_index = np.argmax(prediction)
-        predicted_label = self.label_map.get(predicted_label_index, "Unknown")
-        return predicted_label
+
+        try:
+            label_map = {0: 'A', 1: 'B', 2: 'C'}  # Cập nhật cho phù hợp với mô hình của bạn
+            predicted_label = label_map[predicted_label_index]
+            return predicted_label
+        except KeyError:
+            print(f"Chỉ số nhãn {predicted_label_index} không hợp lệ!")
+            return None
 
     def evaluate_prediction(self, actual_label, predicted_label):
-        """Đánh giá độ chính xác của dự đoán."""
+        """Đánh giá độ chính xác của dự đoán"""
         return actual_label == predicted_label
 
     def display_instruction(self, image_path):

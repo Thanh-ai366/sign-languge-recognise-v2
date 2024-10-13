@@ -27,7 +27,7 @@ app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads/'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-model_path = "app/data/saved_models/cnn_model.h5"
+model_path = "app/data/saved_models/cnn_model_best.keras"
 labels_dict = {i: str(i) for i in range(10)}
 labels_dict.update({10 + i: chr(97 + i) for i in range(26)})
 

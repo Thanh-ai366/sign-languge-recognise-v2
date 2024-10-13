@@ -13,7 +13,6 @@ import tensorflow as tf
 
 # ----------------------------------------------------
 # Lớp LearningAPP
-
 class LearningApp(QWidget):
     def __init__(self, username):
         super().__init__()
@@ -245,7 +244,6 @@ class LessonManager:
     def get_lessons(self):
         return self.lessons
 
-
 # ----------------------------------------------------
 # Lớp ProgressTracker
 class ProgressTracker:
@@ -372,7 +370,6 @@ class ImageAnalyzer:
         plt.axis('off')
         plt.show()
 
-
 # ----------------------------------------------------
 # Hàm khởi động quá trình học
 def start_learning(username):
@@ -444,7 +441,6 @@ def start_learning(username):
         feedback.give_feedback(selected_lesson.get_sign(), predicted_label)
 
         print(f"Độ chính xác: {accuracy}")
-
 
 if __name__ == "__main__":
     start_learning("user123")

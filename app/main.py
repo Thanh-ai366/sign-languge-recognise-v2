@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QMessageBox
 )
 from PyQt5.QtWebEngineWidgets import QWebEngineView
+from PyQt5.QtCore import QUrl
 from flask import Flask, render_template
 from prediction import PredictionWindow
 from learning import LearningApp
@@ -79,9 +80,11 @@ class MainUI(QMainWindow):
         self.prediction_window.show()
 
     def open_learning_window(self):
-        """Mở cửa sổ Học Ngôn ngữ Ký hiệu"""
-        self.learning_window = LearningApp(self.user.username)
-        self.learning_window.show()
+        if self.user and hasattr(self.user, 'username'):  # Kiểm tra self.user và username
+            self.learning_window = LearningApp(self.user.username)  # Truyền username vào LearningApp
+            self.learning_window.show()
+        else:
+            QMessageBox.critical(self, "Lỗi", "Người dùng chưa đăng nhập hoặc không có tên đăng nhập.")
 
     def open_analytics_window(self):
         """Mở cửa sổ Phân tích Dữ liệu"""

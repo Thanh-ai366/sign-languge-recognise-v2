@@ -2,7 +2,6 @@ import os
 import csv
 import numpy as np
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from sklearn.model_selection import train_test_split
 from app.utils import create_directory, preprocess_image
 
 class DatasetManager:
@@ -24,41 +23,56 @@ class DatasetManager:
         )
 
     def load_dataset(self):
+        if self.csv_file:
+            return self.load_from_csv()
+        else:
+            return self.load_from_directory()
+
+    def load_from_csv(self):
         data = []
         labels = []
-        if self.csv_file:
-            try:
-                with open(self.csv_file, 'r') as file:
-                    reader = csv.reader(file)
-                    for row in reader:
-                        img_path = os.path.join(self.data_dir, row[0])
-                        label = int(row[1])
-                        if os.path.exists(img_path):
-                            img = preprocess_image(img_path, size=(64, 64))
-                            if img is not None:
-                                data.append(img)
-                                labels.append(label)
-                            else:
-                                print(f"Không thể tiền xử lý ảnh: {img_path}")
-                        else:
-                            print(f"Ảnh không tồn tại: {img_path}")
-                return np.array(data), np.array(labels)
-            except Exception as e:
-                print(f"Lỗi khi tải dữ liệu từ CSV: {e}")
-                return None, None
-        else:
-            for label in os.listdir(self.data_dir):
-                label_dir = os.path.join(self.data_dir, label)
-                if os.path.isdir(label_dir):
-                    for img_file in os.listdir(label_dir):
-                        img_path = os.path.join(label_dir, img_file)
-                        image = preprocess_image(img_path, size=(64, 64))
-                        if image is not None:
-                            data.append(image)
+        try:
+            with open(self.csv_file, 'r') as file:
+                reader = csv.reader(file)
+                for row in reader:
+                    img_path, label = self.get_image_path_and_label(row)
+                    if os.path.exists(img_path):
+                        img = preprocess_image(img_path, size=(64, 64))
+                        if img is not None:
+                            data.append(img)
                             labels.append(label)
                         else:
-                            print(f"Không thể xử lý ảnh: {img_path}")
+                            print(f"Không thể tiền xử lý ảnh: {img_path}")
+                    else:
+                        print(f"Ảnh không tồn tại: {img_path}")
             return np.array(data), np.array(labels)
+        except Exception as e:
+            print(f"Lỗi khi tải dữ liệu từ CSV: {e}")
+            return None, None
+
+    def load_from_directory(self):
+        data = []
+        labels = []
+        for label in os.listdir(self.data_dir):
+            label_dir = os.path.join(self.data_dir, label)
+            if os.path.isdir(label_dir):
+                self.load_images_from_label_dir(label_dir, label, data, labels)
+        return np.array(data), np.array(labels)
+
+    def load_images_from_label_dir(self, label_dir, label, data, labels):
+        for img_file in os.listdir(label_dir):
+            img_path = os.path.join(label_dir, img_file)
+            image = preprocess_image(img_path, size=(64, 64))
+            if image is not None:
+                data.append(image)
+                labels.append(label)
+            else:
+                print(f"Không thể xử lý ảnh: {img_path}")
+
+    def get_image_path_and_label(self, row):
+        img_path = os.path.join(self.data_dir, row[0])
+        label = int(row[1])
+        return img_path, label
 
     def augment_dataset(self, data, labels):
         augmented_data = []

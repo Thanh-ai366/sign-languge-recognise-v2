@@ -10,13 +10,11 @@ app = Flask(__name__)
 # API phân tích hiệu suất và tạo biểu đồ
 @app.route('/dashboard')
 def dashboard():
-    # Đọc dữ liệu từ file log
     response_times = []
     timestamps = []
-    
+   
     log_file_path = 'logs/api_requests.log'
-    
-    # Kiểm tra xem tệp log có tồn tại không
+   
     if not os.path.exists(log_file_path):
         return "Log file not found.", 404
 
@@ -26,16 +24,18 @@ def dashboard():
                 parts = line.split(' - ')
                 timestamp = parts[0]
                 response_time = float(parts[-1].split(':')[-1].replace('s', '').strip())
-                timestamps.append(datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S,%f'))
+                timestamps.append(datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S%f'))
                 response_times.append(response_time)
 
-    # Tạo biểu đồ đường (line chart) hiển thị thời gian phản hồi
+    # Kiểm tra xem có dữ liệu không
+    if len(response_times) == 0 or len(timestamps) == 0:
+        return render_template('dashboard.html', graph_json=json.dumps({}))  # Không có dữ liệu, trả về biểu đồ rỗng
+
+    # Tạo biểu đồ khi có dữ liệu
     line_chart = go.Scatter(x=timestamps, y=response_times, mode='lines', name='Thời gian phản hồi')
+    graph_json = json.dumps(go.Figure(data=[line_chart]), cls=PlotlyJSONEncoder)
 
-    # Chuyển đổi biểu đồ thành định dạng JSON để hiển thị trên giao diện web
-    graphJSON = json.dumps([line_chart], cls=PlotlyJSONEncoder)
-
-    return render_template('dashboard.html', graphJSON=graphJSON)
+    return render_template('dashboard.html', graph_json=graph_json)
 
 if __name__ == '__main__':
     app.run(debug=True, use_reloader=False)

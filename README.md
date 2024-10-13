@@ -87,8 +87,8 @@ sign-language-recognise/
 ## Cài đặt
 1. **Clone repository:**
    ```
-   git clone https://github.com/username/sign-language-recognise.git
-   cd sign-language-recognise
+   git clone https://github.com/username/sign-language-recognise-v2.git
+   cd sign-language-recognise-v2
    ```
 
 2. **Cài đặt các thư viện cần thiết:**

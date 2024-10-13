@@ -102,9 +102,9 @@ sign-language-recognise/
 ## Sử dụng
 ### 1. Chạy ứng dụng
 Khởi động giao diện chính của phần mềm với PyQt:
-
+```
 python app/main.py
-
+```
 Giao diện chính sẽ mở ra với các chức năng: 
 - **Dự đoán ngôn ngữ ký hiệu**
 - **Học ngôn ngữ ký hiệu**

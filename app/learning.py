@@ -1,3 +1,4 @@
+#learning.py 
 import json
 import os
 import numpy as np
@@ -8,8 +9,45 @@ from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import Qt
 from datetime import datetime
 import cv2
+from jwt.exceptions import TokenExpiredException, InvalidTokenException
 import matplotlib.pyplot as plt
 import tensorflow as tf
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+import jwt
+
+# Đường dẫn đến thư mục dữ liệu của người dùng
+USER_DATA_DIR = "data/user_learning_data"
+
+# Tạo engine SQLAlchemy và session
+engine = create_engine('sqlite:///data/users.db')
+Session = sessionmaker(bind=engine)
+session = Session()
+
+# ----------------------------------------------------
+
+def get_user_data_path(token):
+    try:
+        decoded_token = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=['HS256'])
+        username = decoded_token['username']
+    except jwt.ExpiredSignatureError:
+        raise TokenExpiredException("Token hết hạn. Vui lòng đăng nhập lại.")
+    except jwt.InvalidTokenError:
+        raise InvalidTokenException("Token không hợp lệ. Vui lòng đăng nhập lại.")
+
+    user_data_path = os.path.join(USER_DATA_DIR, username)
+    if not os.path.exists(user_data_path):
+        os.makedirs(user_data_path)
+    
+    return user_data_path
+
+# ----------------------------------------------------
+
+def start_learning(token):
+    user_data_path = get_user_data_path(token)
+    if user_data_path:
+        # Bắt đầu quá trình học với dữ liệu riêng của người dùng
+        print(f"Bắt đầu học cho người dùng tại: {user_data_path}")
 
 # ----------------------------------------------------
 # Lớp LearningAPP
@@ -71,27 +109,30 @@ class LearningApp(QWidget):
         self.instruction_label.setText(lesson.get_instruction())
     def capture_image_and_predict(self):
         """Chụp ảnh từ camera và dự đoán ký hiệu"""
-        img = self.image_analyzer.capture_image()
-        if img is not None:
-            predicted_label = self.image_analyzer.predict(img)
-            if predicted_label is None:
-                QMessageBox.warning(self, "Lỗi", "Không thể thực hiện dự đoán!")
-                return
+        try:
+            img = self.image_analyzer.capture_image()
+            if img is not None:
+                predicted_label = self.image_analyzer.predict(img)
+                if predicted_label is None:
+                    QMessageBox.warning(self, "Lỗi", "Không thể thực hiện dự đoán!")
+                    return
 
-            actual_label = self.lesson_list.currentItem().text().split(" - ")[0]
-            accuracy = self.image_analyzer.evaluate_prediction(actual_label, predicted_label)
+                actual_label = self.lesson_list.currentItem().text().split(" - ")[0]
+                accuracy = self.image_analyzer.evaluate_prediction(actual_label, predicted_label)
 
-            # Lưu phản hồi và tiến trình học tập
-            self.feedback.give_feedback(actual_label, predicted_label)
-            self.progress_tracker.update_progress(actual_label, accuracy)
+                # Lưu phản hồi và tiến trình học tập
+                self.feedback.give_feedback(actual_label, predicted_label)
+                self.progress_tracker.update_progress(actual_label, accuracy)
 
-            # Hiển thị kết quả cho người dùng
-            QMessageBox.information(self, "Kết quả",
-                                    f"Ký hiệu thực tế: {actual_label}\n"
-                                    f"Ký hiệu dự đoán: {predicted_label}\n"
-                                    f"Độ chính xác: {'Đúng' if accuracy else 'Sai'}")
-        else:
-            QMessageBox.warning(self, "Lỗi", "Không thể khởi động camera hoặc chụp ảnh từ camera!")
+                # Hiển thị kết quả cho người dùng
+                QMessageBox.information(self, "Kết quả",
+                                        f"Ký hiệu thực tế: {actual_label}\n"
+                                        f"Ký hiệu dự đoán: {predicted_label}\n"
+                                        f"Độ chính xác: {'Đúng' if accuracy else 'Sai'}")
+            else:
+                QMessageBox.warning(self, "Lỗi", "Không thể khởi động camera hoặc chụp ảnh từ camera!")
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi", f"Lỗi khi thực hiện dự đoán: {str(e)}")
 
     def display_progress(self):
         """Hiển thị tiến trình học tập"""

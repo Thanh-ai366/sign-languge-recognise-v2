@@ -92,15 +92,25 @@ class SignLanguagePredictor:
         self.engine.runAndWait()
 
     def predict(self, image):
-        image = image.reshape((1, 64, 64, 1))  # Đảm bảo đúng định dạng đầu vào
+        """Dự đoán ký hiệu từ hình ảnh"""
+        if self.model is None:
+            print("Mô hình chưa được tải. Không thể dự đoán.")
+            return None
+
         try:
-            prediction = self.model.predict(image)
+            processed_img = self.preprocess_image(image)
+            prediction = self.model.predict(processed_img)  # Giả lập dự đoán
+            predicted_label_index = np.argmax(prediction)
+
+            try:
+                label_map = {0: '0', 1: '1', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9', 10: 'A', 11: 'B', 12: 'C', 13: 'D', 14: 'E', 15: 'F', 16: 'G', 17: 'H', 18: 'I', 19: 'J', 20: 'K', 21: 'L', 22: 'M', 23: 'N', 24: 'O', 25: 'P', 26: 'Q', 27: 'R', 28: 'S', 29: 'T', 30: 'U', 31: 'V', 32: 'W', 33: 'X', 34: 'Y', 35: 'Z'}  
+                
+                predicted_label = label_map[predicted_label_index]
+                return predicted_label
+            except KeyError:
+                raise PredictionException(f"Chỉ số nhãn {predicted_label_index} không hợp lệ!")
         except Exception as e:
-            raise PredictionException(f"Lỗi khi thực hiện dự đoán: {e}")  # Lỗi được bắt
-        
-        predicted_label = np.argmax(prediction)
-        label = self.labels_dict.get(predicted_label, "Unknown")  # Tránh lỗi nếu nhãn không tồn tại
-        threading.Thread(target=self.say_sign, args=(label,)).start()
+            raise PredictionException(f"Lỗi khi dự đoán: {e}")
 
     def process_next_frame(self):
         frame = self.get_frame()

@@ -22,11 +22,10 @@ def dashboard():
 class MainUI(QMainWindow):
     def __init__(self, user):
         super().__init__()
-        self.user = user
+        self.user = user  # Lưu trữ đối tượng người dùng
         self.setWindowTitle("Hệ thống nhận diện ngôn ngữ ký hiệu")
         self.setGeometry(200, 200, 800, 600)
 
-        # Giao diện chính chứa 3 nút Prediction, Learning, Analytics
         layout = QVBoxLayout()
 
         # Nút Prediction
@@ -44,23 +43,26 @@ class MainUI(QMainWindow):
         self.analytics_button.clicked.connect(self.open_analytics_window)
         layout.addWidget(self.analytics_button)
 
-        # Thiết lập layout
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
 
-        # Khởi động dashboard Flask
+        # Khởi động Flask dashboard trong luồng riêng
         self.start_dashboard_thread()
 
-        # Mở dashboard ngay khi khởi tạo MainUI
+        # Mở Flask dashboard khi khởi tạo MainUI
         self.open_dashboard_window()
 
     def start_dashboard_thread(self):
-        """Khởi động Flask trong luồng riêng"""
+        """Khởi động Flask dashboard trong luồng riêng"""
         threading.Thread(target=self.run_dashboard_app).start()
 
     def run_dashboard_app(self):
-        dashboard_app.run(debug=True, use_reloader=False)  # Không sử dụng reloader khi chạy trong luồng
+        """Chạy Flask dashboard"""
+        try:
+            dashboard_app.run(debug=True, use_reloader=False)
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi", f"Không thể khởi động dashboard: {str(e)}")
 
     def open_dashboard_window(self):
         """Mở cửa sổ Dashboard trong PyQt"""
@@ -69,36 +71,50 @@ class MainUI(QMainWindow):
         self.dashboard_window.setGeometry(100, 100, 1200, 800)
 
         web_view = QWebEngineView()
-        web_view.setUrl(QUrl("http://127.0.0.1:5000/dashboard")) 
-        Flask
+        web_view.setUrl(QUrl("http://127.0.0.1:5000/dashboard"))
+
         self.dashboard_window.setCentralWidget(web_view)
         self.dashboard_window.show()
 
     def open_prediction_window(self):
         """Mở cửa sổ Dự đoán"""
-        self.prediction_window = PredictionWindow(self)
-        self.prediction_window.show()
+        try:
+            self.prediction_window = PredictionWindow(self)
+            self.prediction_window.show()
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi", f"Không thể mở cửa sổ Dự đoán: {str(e)}")
 
     def open_learning_window(self):
-        if self.user and hasattr(self.user, 'username'):  # Kiểm tra self.user và username
-            self.learning_window = LearningApp(self.user.username)  # Truyền username vào LearningApp
-            self.learning_window.show()
-        else:
-            QMessageBox.critical(self, "Lỗi", "Người dùng chưa đăng nhập hoặc không có tên đăng nhập.")
+        """Mở cửa sổ Học Ngôn ngữ Ký hiệu"""
+        try:
+            if self.user and hasattr(self.user, 'username'):
+                self.learning_window = LearningApp(self.user.username)  # Truyền username vào LearningApp
+                self.learning_window.show()
+            else:
+                QMessageBox.critical(self, "Lỗi", "Người dùng chưa đăng nhập hoặc không có tên đăng nhập.")
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi", f"Không thể mở cửa sổ Học Ngôn ngữ Ký hiệu: {str(e)}")
 
     def open_analytics_window(self):
         """Mở cửa sổ Phân tích Dữ liệu"""
-        self.analytics_window = AnalysisWindow()
-        self.analytics_window.show()
+        try:
+            self.analytics_window = AnalysisWindow()
+            self.analytics_window.show()
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi", f"Không thể mở cửa sổ Phân tích Dữ liệu: {str(e)}")
+
 
 def handle_login_response(response, login_window):
+    """Xử lý kết quả đăng nhập"""
     if "Token:" in response:
         user_manager = UserManager()
-        main_ui = MainUI(user_manager)
+        user = user_manager.get_user_from_token(response)  # Lấy thông tin người dùng từ token
+        main_ui = MainUI(user)  # Truyền đối tượng người dùng vào MainUI
         main_ui.show()
-        login_window.close()  # Đóng cửa sổ đăng nhập
+        login_window.close()
     else:
         QMessageBox.critical(login_window, 'Thất bại', response)
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

@@ -1,6 +1,7 @@
 # analytics.py
 import csv
 import cv2
+import logging
 import os
 from collections import defaultdict
 from datetime import datetime
@@ -10,6 +11,9 @@ from fpdf import FPDF
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QDialog
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from skimage.metrics import structural_similarity as ssim
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 class DataLogger:
     def __init__(self, file_path):
@@ -41,25 +45,28 @@ class SignAnalysis:
         self.data = self.load_data()
 
     def compare_images(self, img_path1, img_path2):
-        if not os.path.exists(img_path1) or not os.path.exists(img_path2):
-            print(f"Không tìm thấy một trong hai ảnh: {img_path1}, {img_path2}")
+        try:
+            if not os.path.exists(img_path1) or not os.path.exists(img_path2):
+                print(f"Không tìm thấy một trong hai ảnh: {img_path1}, {img_path2}")
+                return 0.0
+
+            img1 = cv2.imread(img_path1, cv2.IMREAD_GRAYSCALE)
+            img2 = cv2.imread(img_path2, cv2.IMREAD_GRAYSCALE)
+
+            if img1 is None or img2 is None:
+                print(f"Lỗi khi đọc ảnh: {img_path1}, {img_path2}")
+                return 0.0
+
+            img1 = cv2.resize(img1, self.IMAGE_SIZE)
+            img2 = cv2.resize(img2, self.IMAGE_SIZE)
+
+            similarity_index, _ = ssim(img1, img2, full=True)
+
+            return similarity_index
+        except Exception as e:
+            print(f"Lỗi khi so sánh ảnh: {e}")
             return 0.0
-
-        img1 = cv2.imread(img_path1, cv2.IMREAD_GRAYSCALE)
-        img2 = cv2.imread(img_path2, cv2.IMREAD_GRAYSCALE)
-
-        if img1 is None or img2 is None:
-            print(f"Lỗi khi đọc ảnh: {img_path1}, {img_path2}")
-            return 0.0
-
-        img1 = cv2.resize(img1, self.IMAGE_SIZE)
-        img2 = cv2.resize(img2, self.IMAGE_SIZE)
-
-        from skimage.metrics import structural_similarity as ssim
-        similarity_index, _ = ssim(img1, img2, full=True)
-
-        return similarity_index
-
+        
     def plot_similarity(self):
         signs, similarities = self.compute_similarity()
 
@@ -89,45 +96,62 @@ class SignAnalysis:
         plt.show()
 
 
-    def load_data(self):
-        data = defaultdict(list)
+    def load_dataset(self):
+        data = []
+        labels = []
         try:
-            with open(self.file_path, mode='r') as file:
-                reader = csv.DictReader(file)
-                for row in reader:
+            for label in os.listdir(self.processed_dir):
+                label_dir = os.path.join(self.processed_dir, label)
+                if os.path.isdir(label_dir):
                     try:
-                        sign = int(row["Sign"])
-                        accuracy = float(row["Accuracy"])
-                        time_taken = float(row["Time Taken"])
-                        image_path = row["Image Path"]  # Sửa tên trường CSV cho đúng
-                        data[sign].append((accuracy, time_taken, image_path))
-                    except ValueError as e:
-                        print(f"Lỗi trong dữ liệu: {e}")
+                        label_id = int(label)
+                    except ValueError:
+                        logger.warning(f"Bỏ qua nhãn không hợp lệ: {label}")
                         continue
-        except FileNotFoundError:
-            print(f"Tệp {self.file_path} không tồn tại!")
-        return data
+
+                    for img_file in os.listdir(label_dir):
+                        img_path = os.path.join(label_dir, img_file)
+                        logger.info(f"Đang xử lý ảnh: {img_path}")
+                        image = self.preprocess_image(img_path, size=(64, 64))
+                        if image is not None:
+                            data.append(image)
+                            labels.append(label_id)
+                        else:
+                            logger.warning(f"Không thể xử lý ảnh: {img_path}")
+            if len(data) == 0:
+                raise ValueError("Không có dữ liệu nào được tải. Vui lòng kiểm tra thư mục dữ liệu.")
+        except Exception as e:
+            logger.error(f"Lỗi khi tải dataset: {str(e)}")
+            raise
+        logger.info(f"Tải thành công {len(data)} mẫu.")
+        return np.array(data), np.array(labels)
 
     def generate_report(self):
         report_data = []
-        for sign, entries in self.data.items():
-            avg_accuracy = np.mean([acc for acc, _, _ in entries])
-            avg_time = np.mean([time for _, time, _ in entries])
-            sample_image = f"sample_images/{sign}.jpg"
+        try:
+            for sign, entries in self.data.items():
+                if not entries:
+                    print(f"Không có dữ liệu cho ký hiệu: {sign}")
+                    continue
 
-            # So sánh các ảnh đã lưu với ảnh mẫu
-            similarities = []
-            for _, _, img_path in entries:
-                similarity = self.compare_images(img_path, sample_image)
-                similarities.append(similarity)
+                avg_accuracy = np.mean([acc for acc, _, _ in entries])
+                avg_time = np.mean([time for _, time, _ in entries])
+                sample_image = f"sample_images/{sign}.jpg"
 
-            avg_similarity = np.mean(similarities)  # Độ giống nhau trung bình với ảnh mẫu
+                # So sánh các ảnh đã lưu với ảnh mẫu
+                similarities = []
+                for _, _, img_path in entries:
+                    similarity = self.image_prediction.compare_images(img_path, sample_image)
+                    similarities.append(similarity)
 
-            report_data.append((sign, avg_accuracy, avg_time, avg_similarity))
-            print(f"Ký hiệu: {sign} - Độ chính xác: {avg_accuracy:.2f} - Thời gian: {avg_time:.2f}s - SSIM: {avg_similarity:.2f}")
+                avg_similarity = np.mean(similarities)
 
+                report_data.append((sign, avg_accuracy, avg_time, avg_similarity))
+                print(f"Ký hiệu: {sign} - Độ chính xác: {avg_accuracy:.2f} - Thời gian: {avg_time:.2f}s - SSIM: {avg_similarity:.2f}")
+        except Exception as e:
+            print(f"Lỗi khi tạo báo cáo: {str(e)}")
         return report_data
-
+    
     def compute_similarity(self):
         signs = []
         similarities = []

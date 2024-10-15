@@ -9,7 +9,7 @@ Dự án bao gồm các chức năng chính như:
 - **Phân tích dữ liệu** từ quá trình học tập và dự đoán.
 
 ## Cấu trúc dự án
-
+```
 sign-language-recognise/
 │
 ├── app/
@@ -72,7 +72,7 @@ sign-language-recognise/
 ├── README.md                 # Hướng dẫn sử dụng và cài đặt
 ├── requirements.txt          # Các thư viện cần thiết
 └── setup.py                  # Cấu hình cài đặt dự án
-
+```
 
 ## Yêu cầu hệ thống
 - Python 3.8+
@@ -86,15 +86,15 @@ sign-language-recognise/
 
 ## Cài đặt
 1. **Clone repository:**
-   
-   git clone https://github.com/username/sign-language-recognise.git
-   cd sign-language-recognise
+   ```
+   git clone https://github.com/username/sign-language-recognise-v2.git
+   cd sign-language-recognise-v2
    ```
 
 2. **Cài đặt các thư viện cần thiết:**
-   
+   ```
    pip install -r requirements.txt
-   
+   ```
 
 3. **Cấu hình hệ thống:**
    - Đảm bảo có thư mục `app/data/saved_models/` và đặt mô hình huấn luyện sẵn `cnn_model_best.keras` tại đó.
@@ -102,9 +102,9 @@ sign-language-recognise/
 ## Sử dụng
 ### 1. Chạy ứng dụng
 Khởi động giao diện chính của phần mềm với PyQt:
-
+```
 python app/main.py
-
+```
 Giao diện chính sẽ mở ra với các chức năng: 
 - **Dự đoán ngôn ngữ ký hiệu**
 - **Học ngôn ngữ ký hiệu**
@@ -112,9 +112,9 @@ Giao diện chính sẽ mở ra với các chức năng:
 
 ### 2. Huấn luyện mô hình
 Nếu muốn huấn luyện lại mô hình với dữ liệu của riêng bạn:
-
+```
 python train_cnn_model.py
-
+```
 
 ### 3. API Dự đoán
 Khởi động server Flask để sử dụng API dự đoán:
@@ -145,9 +145,9 @@ Thư mục `tests/` chứa các tệp kiểm thử cho từng module:
 - ....
 
 Chạy các kiểm thử:
-
+```
 pytest tests/
-
+```
 
 ## Cải thiện và mở rộng
 - **Thêm dữ liệu mới:** Bạn có thể mở rộng dataset bằng cách thêm các ký hiệu mới vào thư mục dữ liệu và huấn luyện lại mô hình.

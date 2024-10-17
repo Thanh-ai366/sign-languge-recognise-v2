@@ -24,3 +24,44 @@ class AppStyles:
             background-color: #A9A9A9;  /* Màu khi nút bị vô hiệu hóa */
         }
     """
+    # CSS cho chế độ sáng
+    light_mode = """
+        QWidget {
+            background-color: #FFFFFF;
+            color: #000000;
+        }
+        QPushButton {
+            background-color: #2563EB;
+            color: white;
+            border-radius: 5px;
+            padding: 10px;
+        }
+        QPushButton:hover {
+            background-color: #1D4ED8;
+        }
+    """
+
+    # CSS cho chế độ tối
+    dark_mode = """
+        QWidget {
+            background-color: #1F2937;
+            color: #F3F4F6;
+        }
+        QPushButton {
+            background-color: #3B82F6;
+            color: white;
+            border-radius: 5px;
+            padding: 10px;
+        }
+        QPushButton:hover {
+            background-color: #2563EB;
+        }
+    """
+
+    # Hàm chuyển đổi chế độ trong ứng dụng
+    @staticmethod
+    def apply_styles(app, dark_mode=False):
+        if dark_mode:
+            app.setStyleSheet(AppStyles.dark_mode)
+        else:
+            app.setStyleSheet(AppStyles.light_mode)

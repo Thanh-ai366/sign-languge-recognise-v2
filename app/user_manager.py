@@ -1,4 +1,3 @@
-#user_manager
 import os
 import threading
 import jwt
@@ -13,6 +12,7 @@ from sqlalchemy import create_engine, Column, String, DateTime, inspect
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from argon2 import PasswordHasher, exceptions as argon2_exceptions
+from user_manager import LoginWindow, UserManager
 import redis
 import uuid
 
@@ -46,6 +46,13 @@ def blacklist_token(jti):
 def is_token_blacklisted(jti):
     return r.get(jti) is not None
 
+def add_padding(token):
+    """Thêm padding vào token để đảm bảo chuỗi Base64 hợp lệ."""
+    missing_padding = len(token) % 4
+    if missing_padding:
+        token += '=' * (4 - missing_padding)
+    return token
+
 # Cấu hình SQLAlchemy
 Base = declarative_base()
 engine = create_engine('sqlite:///data/users.db')
@@ -59,17 +66,18 @@ class MainApp(QMainWindow):
         self.setWindowTitle("Ứng dụng chính")
         self.setGeometry(200, 200, 800, 600)
 
-        # Tạo layout và thêm nhãn
+        # Giao diện chính
         layout = QVBoxLayout()
         try:
             username = self.get_username_from_token()
-            label = QLabel(f"Chào mừng bạn, {username}!", self)
+            label = QLabel(f"Chào mừng bạn {username}!", self)
         except ValueError as e:
             QMessageBox.critical(self, 'Lỗi Token', str(e))
             self.refresh_jwt_token()
 
         layout.addWidget(label)
 
+        # Tạo các nút bấm trong giao diện
         self.create_buttons(layout)
 
         container = QWidget()
@@ -77,12 +85,13 @@ class MainApp(QMainWindow):
         self.setCentralWidget(container)
 
     def get_username_from_token(self):
+        """Lấy tên người dùng từ token"""
         user_manager = UserManager()
         user = user_manager.get_user_from_token(self.token)
         return user.username if user else "Người dùng không xác định"
 
     def refresh_jwt_token(self):
-        # Khi token hết hạn, dùng refresh token để lấy token mới
+        """Làm mới JWT token khi hết hạn"""
         user_manager = UserManager()
         new_token = user_manager.refresh_jwt(self.refresh_token)
         if new_token:
@@ -91,6 +100,8 @@ class MainApp(QMainWindow):
         else:
             QMessageBox.critical(self, 'Lỗi', 'Không thể làm mới token, vui lòng đăng nhập lại.')
             self.close()
+
+
 
 class User(Base):
     def __init__(self, username):
@@ -135,14 +146,17 @@ class UserManager:
 
         try:
             ph.verify(user.hashed_password, password)
-            return f"Token: {self.create_jwt(username)}, Refresh Token: {self.create_refresh_token(username)}"
+            return {
+                "token": self.create_jwt(username),
+                "refresh_token": self.create_refresh_token(username),
+            }
         except argon2_exceptions.VerifyMismatchError:
             return "Mật khẩu không đúng"
 
     def create_jwt(self, username):
         secret_key = os.getenv("SECRET_KEY")
         if not secret_key:
-            return "Lỗi: SECRET_KEY chưa được thiết lập trong biến môi trường"
+            raise ValueError("SECRET_KEY chưa được thiết lập trong biến môi trường")
 
         expiration_time = datetime.utcnow() + timedelta(hours=1)
         jti = str(uuid.uuid4())  # Tạo JTI (JWT ID) duy nhất
@@ -190,8 +204,11 @@ class UserManager:
         }
         refresh_token = jwt.encode(payload, secret_key, algorithm='HS256')
         return refresh_token
+
     def get_user_from_token(self, token):
         try:
+            # Thêm padding vào token nếu thiếu
+            token = add_padding(token)
             decoded_token = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=['HS256'])
             username = decoded_token.get('username')
             if username:
@@ -208,7 +225,7 @@ class UserManager:
         blacklist_token(jti)  # Thêm token vào blacklist
 
 class LoginWindow(QWidget):
-    auth_result_signal = pyqtSignal(str)
+    auth_result_signal = pyqtSignal(object)
 
     def __init__(self):
         super().__init__()
@@ -244,55 +261,45 @@ class LoginWindow(QWidget):
 
         self.setLayout(layout)
 
+    def open_register_window(self):
+        register_window = RegisterWindow()
+        register_window.show()
+
     def login(self):
         username = self.username_entry.text()
         password = self.password_entry.text()
         user_manager = UserManager()
-
-        # Tạo luồng để xử lý đăng nhập
-        threading.Thread(target=self.authenticate_login, args=(user_manager, username, password)).start()
-
-    def authenticate_login(self, user_manager, username, password):
-        response = user_manager.login(username, password)
-        self.auth_result_signal.emit(response)
+        result = user_manager.login(username, password)
+        self.auth_result_signal.emit(result)
 
     def handle_auth_result(self, response):
-        # Sử dụng QTimer để gọi update_ui trong luồng chính
-        QTimer.singleShot(0, lambda: self.update_ui(response))
-
-    def update_ui(self, response):
-        if "Token:" in response:
-            token = response.split("Token: ")[1].split(",")[0]  # Tách token từ phản hồi
+        if isinstance(response, dict):  # Nếu phản hồi là từ điển
+            token = response["token"]
+            refresh_token = response["refresh_token"]
             QMessageBox.information(self, 'Đăng nhập thành công', 'Đăng nhập thành công')
-            self.open_main_app(token)  # Truyền token khi mở ứng dụng chính
+            self.open_main_app(token, refresh_token)  # Gọi hàm với 2 đối số
         else:
             QMessageBox.critical(self, 'Thất bại', response)
 
-    def open_main_app(self, token):
-        self.main_app = MainApp(token)  # Chuyển token vào MainApp
-        self.main_app.show()
-        self.close()
+    def open_main_app(self, token, refresh_token):
+        main_app = MainApp(token, refresh_token)
+        main_app.show()
+        self.close()  # Đóng cửa sổ đăng nhập
 
-    def open_register_window(self):
-        self.register_window = RegisterWindow()
-        self.register_window.show()
-
-# Thay đổi trong class RegisterWindow
 class RegisterWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.initUI()
 
     def initUI(self):
-        self.setWindowTitle('Đăng ký tài khoản mới')
-        self.setGeometry(100, 100, 400, 250)  # Giảm chiều cao cho phù hợp
+        self.setWindowTitle('Đăng ký')
+        self.setGeometry(100, 100, 400, 300)
 
         layout = QVBoxLayout()
 
         title = QLabel('Đăng ký tài khoản', self)
         layout.addWidget(title)
 
-        # Các trường nhập liệu
         self.username_entry = QLineEdit(self)
         self.username_entry.setPlaceholderText("Tên người dùng")
         layout.addWidget(self.username_entry)
@@ -302,12 +309,6 @@ class RegisterWindow(QWidget):
         self.password_entry.setEchoMode(QLineEdit.Password)
         layout.addWidget(self.password_entry)
 
-        self.confirm_password_entry = QLineEdit(self)
-        self.confirm_password_entry.setPlaceholderText("Xác nhận mật khẩu")
-        self.confirm_password_entry.setEchoMode(QLineEdit.Password)
-        layout.addWidget(self.confirm_password_entry)
-
-        # Nút đăng ký
         register_button = QPushButton('Đăng ký', self)
         register_button.clicked.connect(self.register)
         layout.addWidget(register_button)
@@ -317,28 +318,13 @@ class RegisterWindow(QWidget):
     def register(self):
         username = self.username_entry.text()
         password = self.password_entry.text()
-        confirm_password = self.confirm_password_entry.text()
-
-        if password != confirm_password:
-            QMessageBox.critical(self, 'Lỗi', 'Mật khẩu không khớp.')
-            return
-
         user_manager = UserManager()
+        result = user_manager.register(username, password)
+        QMessageBox.information(self, 'Kết quả', result)
 
-        threading.Thread(target=self.authenticate_register, args=(user_manager, username, password)).start()
-
-    def authenticate_register(self, user_manager, username, password):
-        response = user_manager.register(username, password)
-        if response == "Đăng ký thành công":
-            QMessageBox.information(self, 'Thành công', 'Đăng ký thành công!')
-            self.close()  # Đóng cửa sổ đăng ký sau khi đăng ký thành công
-        else:
-            QMessageBox.critical(self, 'Thất bại', response)
-
-if __name__ == "__main__":
-    add_blacklisted_tokens_column()  
-    app = QApplication([])
-    window = LoginWindow()
-    window.show()
-    app.exec_()
-
+if __name__ == '__main__':
+    import sys
+    app = QApplication(sys.argv)
+    login_window = LoginWindow()
+    login_window.show()
+    sys.exit(app.exec_())

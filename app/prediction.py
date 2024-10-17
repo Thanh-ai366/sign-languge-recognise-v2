@@ -15,6 +15,7 @@ import threading
 class PyQtThreadException(Exception):
     """Lỗi xảy ra khi PyQt xử lý không đúng trong thread khác."""
     pass
+
 class WebcamOpenException(Exception):
     pass
 
@@ -257,6 +258,9 @@ class PredictionWindow(QDialog):
             labels_dict=self.get_labels_dict(), 
             parent_window=self
         )
+        # Hiển thị video từ camera
+        self.video_label = QLabel(self)
+        self.result_label = QLabel("Kết quả dự đoán: ")
 
         # Nhãn hiển thị kết quả dự đoán
         self.result_label = QLabel("Dự đoán: ")
@@ -275,7 +279,10 @@ class PredictionWindow(QDialog):
 
         # Nút để dừng dự đoán
         self.stop_button = QPushButton("Dừng dự đoán")
-        self.stop_button.clicked.connect(self.stop_prediction)
+        
+        layout = QVBoxLayout()
+        layout.addWidget(self.video_label)
+        layout.addWidget(self.result_label)
         layout.addWidget(self.stop_button)
 
         self.setLayout(layout)

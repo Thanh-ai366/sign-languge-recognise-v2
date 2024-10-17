@@ -1,9 +1,9 @@
 import sys
 import threading
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QMessageBox
+    QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QMessageBox, QStackedWidget
 )
-from PyQt5.QtWebEngineWidgets import QWebEngineView
+from PyQt5.QtWebEngineWidgets import QWebEngineView 
 from PyQt5.QtCore import QUrl
 from flask import Flask, render_template
 from prediction import PredictionWindow
@@ -22,36 +22,53 @@ def dashboard():
 class MainUI(QMainWindow):
     def __init__(self, user):
         super().__init__()
-        self.user = user  # Lưu trữ đối tượng người dùng
-        self.setWindowTitle("Hệ thống nhận diện ngôn ngữ ký hiệu")
-        self.setGeometry(200, 200, 800, 600)
+        self.user = user
+        self.setWindowTitle("Ngôn ngữ Ký hiệu - Giao diện chính")
+        self.setGeometry(200, 200, 1000, 800)
 
+        # QStackedWidget chứa các màn hình chức năng
+        self.stacked_widget = QStackedWidget()
+        
+        # Khởi tạo các màn hình chức năng
+        self.prediction_window = PredictionWindow(self)
+        self.learning_window = LearningApp(self.user.username)
+        self.analytics_window = AnalysisWindow()
+
+        # Thêm các màn hình vào stacked_widget
+        self.stacked_widget.addWidget(self.prediction_window)
+        self.stacked_widget.addWidget(self.learning_window)
+        self.stacked_widget.addWidget(self.analytics_window)
+
+        # Nút quay lại
+        self.back_button = QPushButton("Quay lại")
+        self.back_button.clicked.connect(self.go_back)
+
+        # Nút chuyển đổi chế độ sáng/tối
+        self.mode_button = QPushButton("Chuyển chế độ sáng/tối")
+        self.mode_button.clicked.connect(self.toggle_mode)
+
+        # Layout chính
         layout = QVBoxLayout()
+        layout.addWidget(self.back_button)
+        layout.addWidget(self.mode_button)
+        layout.addWidget(self.stacked_widget)
 
-        # Nút Prediction
-        self.prediction_button = QPushButton("Dự đoán Ngôn ngữ Ký hiệu")
-        self.prediction_button.clicked.connect(self.open_prediction_window)
-        layout.addWidget(self.prediction_button)
-
-        # Nút Learning
-        self.learning_button = QPushButton("Học Ngôn ngữ Ký hiệu")
-        self.learning_button.clicked.connect(self.open_learning_window)
-        layout.addWidget(self.learning_button)
-
-        # Nút Analytics
-        self.analytics_button = QPushButton("Phân tích dữ liệu")
-        self.analytics_button.clicked.connect(self.open_analytics_window)
-        layout.addWidget(self.analytics_button)
-
+        # Tạo container cho layout
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
 
-        # Khởi động Flask dashboard trong luồng riêng
         self.start_dashboard_thread()
 
-        # Mở Flask dashboard khi khởi tạo MainUI
         self.open_dashboard_window()
+    def go_back(self):
+        """Quay lại màn hình chính (Dashboard)"""
+        self.stacked_widget.setCurrentIndex(0)
+
+    def toggle_mode(self):
+        """Chuyển đổi giữa chế độ sáng và tối"""
+        pass
+
 
     def start_dashboard_thread(self):
         """Khởi động Flask dashboard trong luồng riêng"""
@@ -106,23 +123,26 @@ class MainUI(QMainWindow):
 
 def handle_login_response(response, login_window):
     """Xử lý kết quả đăng nhập"""
-    if "Token:" in response:
+    if "Token:" in response and "Refresh Token:" in response:
         user_manager = UserManager()
-        user = user_manager.get_user_from_token(response)  # Lấy thông tin người dùng từ token
-        main_ui = MainUI(user)  # Truyền đối tượng người dùng vào MainUI
-        main_ui.show()
-        login_window.close()
+        token = response.split("Token: ")[1].strip()  # Lấy token từ phản hồi
+        refresh_token = response.split("Refresh Token: ")[1].strip()  # Lấy refresh token từ phản hồi
+        try:
+            user_manager.get_user_from_token(token)  # Lấy thông tin người dùng từ token
+            user_manager.open_main_app(token, refresh_token)  # Mở MainApp với token và refresh_token
+            login_window.close()
+        except ValueError as e:
+            QMessageBox.critical(login_window, 'Lỗi Token', str(e))
     else:
         QMessageBox.critical(login_window, 'Thất bại', response)
+
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
-    # Hiển thị cửa sổ đăng nhập
     login_window = LoginWindow()
 
-    # Kết nối tín hiệu đăng nhập thành công
     login_window.auth_result_signal.connect(lambda response: handle_login_response(response, login_window))
 
     login_window.show()

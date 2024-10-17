@@ -9,7 +9,7 @@ from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import Qt
 from datetime import datetime
 import cv2
-from jwt.exceptions import TokenExpiredException, InvalidTokenException
+from jwt import ExpiredSignatureError, InvalidTokenError
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from sqlalchemy import create_engine

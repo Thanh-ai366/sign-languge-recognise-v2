@@ -18,6 +18,11 @@ import jwt
 
 # Đường dẫn đến thư mục dữ liệu của người dùng
 USER_DATA_DIR = "data/user_learning_data"
+LEARNING_DATA_DIR = "learning"
+
+# Tự động tạo thư mục nếu chưa tồn tại
+os.makedirs(USER_DATA_DIR, exist_ok=True)
+os.makedirs(LEARNING_DATA_DIR, exist_ok=True)
 
 # Tạo engine SQLAlchemy và session
 engine = create_engine('sqlite:///data/users.db')
@@ -150,14 +155,18 @@ class Feedback:
         self.feedback_data = self.load_feedback_data()
 
     def load_feedback_data(self):
-        """Tải phản hồi từ file JSON"""
+        """Tải phản hồi từ file JSON, tạo file mới nếu không tồn tại"""
+        if not os.path.exists(self.feedback_file):
+            # Tạo tệp mới với dữ liệu rỗng nếu chưa tồn tại
+            print(f"File {self.feedback_file} không tồn tại. Tạo file mới.")
+            with open(self.feedback_file, 'w') as file:
+                json.dump({}, file)
+            return {}
+
         try:
             with open(self.feedback_file, 'r') as file:
                 all_feedback = json.load(file)
                 return all_feedback.get(self.username, {})
-        except FileNotFoundError:
-            print(f"File {self.feedback_file} không tồn tại. Tạo file mới.")
-            return {}
         except json.JSONDecodeError:
             print(f"File JSON bị hỏng: {self.feedback_file}")
             return {}
@@ -242,21 +251,24 @@ class LessonManager:
         self.lessons = self.load_lessons()
 
     def load_lessons(self):
-        """Tải dữ liệu bài học từ file JSON"""
+        """Tải dữ liệu bài học từ file JSON, tạo file mới nếu không tồn tại"""
+        if not os.path.exists(self.lessons_file):
+            # Tạo file mới với dữ liệu rỗng nếu không tồn tại
+            print(f"File {self.lessons_file} không tồn tại. Tạo file mới.")
+            with open(self.lessons_file, 'w') as file:
+                json.dump([], file)  # Tạo danh sách rỗng trong file JSON
+            return []
+
         try:
             with open(self.lessons_file, 'r') as file:
                 lessons_data = json.load(file)
                 return [Lesson(**lesson) for lesson in lessons_data]
-        except FileNotFoundError:
-            print(f"File {self.lessons_file} không tồn tại.")
-            return []
         except json.JSONDecodeError:
             print(f"File JSON bị hỏng: {self.lessons_file}")
             return []
         except Exception as e:
             print(f"Lỗi khi tải bài học: {e}")
             return []
-
 
     def save_lessons(self):
         """Lưu dữ liệu bài học vào file JSON"""
@@ -294,14 +306,18 @@ class ProgressTracker:
         self.progress_data = self.load_progress_data()
 
     def load_progress_data(self):
-        """Tải dữ liệu tiến trình học tập từ file JSON"""
+        """Tải dữ liệu tiến trình học tập từ file JSON, tạo file mới nếu không tồn tại"""
+        if not os.path.exists(self.progress_file):
+            # Tạo file mới với dữ liệu rỗng nếu chưa tồn tại
+            print(f"File {self.progress_file} không tồn tại. Tạo file mới.")
+            with open(self.progress_file, 'w') as file:
+                json.dump({}, file)
+            return {}
+
         try:
             with open(self.progress_file, 'r') as file:
                 all_progress = json.load(file)
                 return all_progress.get(self.username, {})
-        except FileNotFoundError:
-            print(f"File {self.progress_file} không tồn tại. Tạo file mới.")
-            return {}
         except json.JSONDecodeError:
             print(f"File JSON bị hỏng: {self.progress_file}")
             return {}

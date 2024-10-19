@@ -95,8 +95,7 @@ class SignAnalysis:
         plt.title('Độ chính xác trung bình của các ký hiệu')
         plt.show()
 
-
-    def load_dataset(self):
+    def load_data(self):
         data = []
         labels = []
         try:
@@ -162,16 +161,6 @@ class SignAnalysis:
             signs.append(sign)
             similarities.append(avg_similarity)
         return signs, similarities
-
-    def plot_accuracy(self):
-        signs, accuracies = self.compute_accuracy()
-
-        plt.figure(figsize=(10, 5))
-        plt.bar(signs, accuracies, color='blue')
-        plt.xlabel('Ký hiệu')
-        plt.ylabel('Độ chính xác trung bình')
-        plt.title('Độ chính xác trung bình của các ký hiệu')
-        plt.show()
 
     def plot_time(self):
         signs, times = self.compute_time()

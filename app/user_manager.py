@@ -12,7 +12,6 @@ from sqlalchemy import create_engine, Column, String, DateTime, inspect
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from argon2 import PasswordHasher, exceptions as argon2_exceptions
-from user_manager import LoginWindow, UserManager
 import redis
 import uuid
 
@@ -83,6 +82,17 @@ class MainApp(QMainWindow):
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
+
+    def create_buttons(self, layout):
+        """Tạo các nút bấm trong giao diện chính."""
+        button_logout = QPushButton("Đăng xuất", self)
+        button_logout.clicked.connect(self.logout)
+        layout.addWidget(button_logout)
+
+    def logout(self):
+        """Xử lý đăng xuất."""
+        QMessageBox.information(self, 'Đăng xuất', 'Bạn đã đăng xuất thành công.')
+        self.close()
 
     def get_username_from_token(self):
         """Lấy tên người dùng từ token"""
